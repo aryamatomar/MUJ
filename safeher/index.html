@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SafeHer — Women Safety Monitoring System</title>
+  <meta name="description" content="SafeHer IoT Women Safety Monitoring System - Interactive Dashboard Prototype" />
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css" />
+  <!-- Socket.IO Client for Real-time ESP32 & Backend Telemetry -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+  <!-- App Container -->
+  <div class="app-layout">
+    
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="brand-logo">
+          <div class="logo-shield">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              <path d="M12 8v4"/>
+              <circle cx="12" cy="15" r="1"/>
+            </svg>
+          </div>
+          <div class="brand-text">
+            <span class="brand-name">SafeHer</span>
+            <span class="brand-tagline">Safety IoT Core</span>
+          </div>
+        </div>
+        <button class="btn-icon mobile-close-btn" id="sidebarCloseBtn" aria-label="Close Sidebar">
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- Navigation Menu -->
+      <nav class="nav-menu">
+        <div class="nav-label">MAIN NAVIGATION</div>
+        <a href="#dashboard" class="nav-item active" data-tab="dashboard">
+          <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="9" rx="1"/>
+            <rect x="14" y="3" width="7" height="5" rx="1"/>
+            <rect x="14" y="12" width="7" height="9" rx="1"/>
+            <rect x="3" y="16" width="7" height="5" rx="1"/>
+          </svg>
+          <span>Dashboard</span>
+        </a>
+        <a href="#emergency" class="nav-item" data-tab="emergency">
+          <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+          <span>Emergency SOS</span>
+          <span class="badge-pill badge-sos-nav" id="navSosBadge">READY</span>
+        </a>
+        <a href="#sensors" class="nav-item" data-tab="sensors">
+          <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+          </svg>
+          <span>MPU6050 Sensor</span>
+        </a>
+        <a href="#history" class="nav-item" data-tab="history">
+          <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+          <span>Alert History</span>
+          <span class="count-bubble" id="historyCount">3</span>
+        </a>
+        <a href="#device" class="nav-item" data-tab="device">
+          <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="4" y="4" width="16" height="16" rx="2"/>
+            <rect x="9" y="9" width="6" height="6"/>
+            <line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/>
+            <line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/>
+            <line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/>
+            <line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/>
+          </svg>
+          <span>Device Hardware</span>
+        </a>
+        <a href="#contacts" class="nav-item" data-tab="contacts">
+          <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          <span>Emergency Contacts</span>
+        </a>
+        <a href="#settings" class="nav-item" data-tab="settings">
+          <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          <span>Settings</span>
+        </a>
+      </nav>
+
+      <!-- Sidebar Footer / Hardware Status Badge -->
+      <div class="sidebar-footer">
+        <div class="device-mini-card">
+          <div class="device-mini-icon">
+            <span class="pulse-dot"></span>
+          </div>
+          <div class="device-mini-info">
+            <span class="device-id">Node: ESP32-WS01</span>
+            <span class="device-proto-tag">Simulated Core v1.0</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      
+      <!-- Top Application Header -->
+      <header class="app-header">
+        <div class="header-left">
+          <button class="btn-icon mobile-menu-btn" id="mobileMenuBtn" aria-label="Open Navigation">
+            <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+          <div>
+            <h1 class="header-title">SafeHer</h1>
+            <p class="header-subtitle">WOMEN SAFETY MONITORING SYSTEM</p>
+          </div>
+        </div>
+
+        <div class="header-right">
+          <!-- Backend Connection Status Indicator -->
+          <div class="proto-pill" id="backendStatusPill" title="Real-time Node.js & Socket.IO backend status">
+            <span class="proto-dot" id="backendStatusDot"></span>
+            <span id="backendStatusText">BACKEND: CONNECTING...</span>
+          </div>
+
+          <!-- Prototype Badge -->
+          <div class="proto-pill">
+            <span class="proto-dot"></span>
+            <span>Prototype • Hardware Ready</span>
+          </div>
+
+          <!-- Quick Clock -->
+          <div class="system-time" id="systemClock">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span id="currentTimeDisplay">--:--:-- PM</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Emergency Active Alert Banner (Shown during simulated SOS) -->
+      <div class="emergency-banner" id="emergencyBanner">
+        <div class="banner-content">
+          <div class="banner-icon-wrapper">
+            <svg viewBox="0 0 24 24" class="banner-alert-icon" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+          </div>
+          <div class="banner-text">
+            <h4>CRITICAL EMERGENCY ALERT TRIGGERED</h4>
+            <p>SOS trigger detected from Node <strong>WS-001</strong>. Simulated buzzer is sounding and RGB LED is flashing red.</p>
+          </div>
+          <button class="btn-banner-reset" onclick="resetAlert()">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+            Reset Alert
+          </button>
+        </div>
+      </div>
+
+      <!-- Dashboard Container -->
+      <div class="content-wrapper">
+
+        <!-- ============================================== -->
+        <!-- SECTION 1: DASHBOARD OVERVIEW                 -->
+        <!-- ============================================== -->
+        <section id="dashboard" class="tab-pane active">
+          
+          <!-- Top Welcome & State Summary -->
+          <div class="section-header-row">
+            <div>
+              <h2 class="section-title">Live Safety Overview</h2>
+              <p class="section-desc">Real-time status indicators and telemetry for wearable node WS-001</p>
+            </div>
+            <div class="actions-group">
+              <button class="btn-secondary" onclick="simulateSensorsOnce()">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                Sync Sensors
+              </button>
+            </div>
+          </div>
+
+          <!-- 8 STATUS CARDS GRID -->
+          <div class="cards-grid">
+            
+            <!-- Card 1: Device Status -->
+            <div class="status-card" id="cardDeviceStatus">
+              <div class="card-header">
+                <span class="card-title">Device Status</span>
+                <span class="card-icon-tag bg-cyan-soft">
+                  <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                </span>
+              </div>
+              <div class="card-body">
+                <div class="card-value-row">
+                  <span class="status-indicator status-green" id="deviceStatusDot"></span>
+                  <span class="card-main-val text-green" id="deviceStatusText">ONLINE</span>
+                </div>
+                <div class="card-footer-info">
+                  <span>ESP32 Node WS-001</span>
+                  <span class="badge-subtle">Wi-Fi Strong</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 2: Safety Status -->
+            <div class="status-card primary-highlight" id="cardSafetyStatus">
+              <div class="card-header">
+                <span class="card-title">Safety Status</span>
+                <span class="card-icon-tag bg-teal-soft">
+                  <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </span>
+              </div>
+              <div class="card-body">
+                <div class="card-value-row">
+                  <span class="status-indicator status-green" id="safetyStatusDot"></span>
+                  <span class="card-main-val text-green" id="safetyStatusText">SAFE</span>
+                </div>
+                <div class="card-footer-info">
+                  <span id="safetyStatusSub">No danger detected</span>
+                  <span class="badge-status-green" id="safetyBadge">ALL SECURE</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 3: SOS Button Status -->
+            <div class="status-card" id="cardSosStatus">
+              <div class="card-header">
+                <span class="card-title">SOS Button</span>
+                <span class="card-icon-tag bg-yellow-soft">
+                  <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                </span>
+              </div>
+              <div class="card-body">
+                <div class="card-value-row">
+                  <span class="status-indicator status-green" id="sosStatusDot"></span>
+                  <span class="card-main-val text-green" id="sosStatusText">READY</span>
+                </div>
+                <div class="card-footer-info">
+                  <span>Physical Tactile Switch</span>
+                  <span class="badge-subtle">Arm State: Active</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 4: MPU6050 Status -->
+            <div class="status-card" id="cardMpuStatus">
+              <div class="card-header">
+                <span class="card-title">MPU6050 Motion</span>
+                <span class="card-icon-tag bg-blue-soft">
+                  <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/></svg>
+                </span>
+              </div>
+              <div class="card-body">
+                <div class="card-value-row">
+                  <span class="status-indicator status-green" id="mpuStatusDot"></span>
+                  <span class="card-main-val text-green" id="mpuStatusText">CONNECTED</span>
+                </div>
+                <div class="card-footer-info">
+                  <span>6-Axis IMU Sensor</span>
+                  <span class="badge-subtle">I2C 0x68</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 5: Buzzer Status -->
+            <div class="status-card" id="cardBuzzerStatus">
+              <div class="card-header">
+                <span class="card-title">Buzzer (Sound)</span>
+                <span class="card-icon-tag bg-slate-soft">
+                  <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                </span>
+              </div>
+              <div class="card-body">
+                <div class="card-value-row">
+                  <span class="status-indicator status-gray" id="buzzerStatusDot"></span>
+                  <span class="card-main-val text-muted" id="buzzerStatusText">OFF</span>
+                </div>
+                <div class="card-footer-info">
+                  <span>Piezo Alarm 85dB</span>
+                  <span class="badge-subtle" id="buzzerFreqTag">Silent</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 6: RGB LED Status -->
+            <div class="status-card" id="cardLedStatus">
+              <div class="card-header">
+                <span class="card-title">RGB LED Visual</span>
+                <span class="card-icon-tag bg-green-soft">
+                  <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                </span>
+              </div>
+              <div class="card-body">
+                <div class="card-value-row">
+                  <span class="led-light-preview led-green" id="ledPreviewLight"></span>
+                  <span class="card-main-val text-green" id="ledStatusText">GREEN</span>
+                </div>
+                <div class="card-footer-info">
+                  <span>Common Anode WS2812</span>
+                  <span class="badge-subtle" id="ledPatternTag">Normal Pulse</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 7: Battery & Activity -->
+            <div class="status-card" id="cardBatteryStatus">
+              <div class="card-header">
+                <span class="card-title">Battery & Power</span>
+                <span class="card-icon-tag bg-cyan-soft">
+                  <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><rect x="1" y="6" width="18" height="12" rx="2"/><line x1="23" y1="11" x2="23" y2="13"/></svg>
+                </span>
+              </div>
+              <div class="card-body">
+                <div class="card-value-row">
+                  <span class="battery-bar-container">
+                    <span class="battery-bar-fill" id="batteryBarFill" style="width: 88%;"></span>
+                  </span>
+                  <span class="card-main-val" id="batteryPercentText">88%</span>
+                </div>
+                <div class="card-footer-info">
+                  <span id="lastActivityText">Last ping: Just now</span>
+                  <span class="badge-subtle">3.95V LiPo</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 8: Alerts Count Today -->
+            <div class="status-card" id="cardAlertsToday">
+              <div class="card-header">
+                <span class="card-title">Alerts Today</span>
+                <span class="card-icon-tag bg-purple-soft">
+                  <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                </span>
+              </div>
+              <div class="card-body">
+                <div class="card-value-row">
+                  <span class="card-main-val text-accent" id="alertsTodayCount">3</span>
+                  <span class="text-subtle-sm">recorded today</span>
+                </div>
+                <div class="card-footer-info">
+                  <span id="lastAlertTimeText">Latest: 12:30 PM</span>
+                  <span class="badge-subtle">Log Active</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Quick Simulation Action Row -->
+          <div class="quick-simulation-banner">
+            <div class="quick-sim-info">
+              <div class="quick-sim-icon">⚡</div>
+              <div>
+                <h4 class="quick-sim-title">Interactive Hardware Simulation Engine</h4>
+                <p class="quick-sim-desc">Click below to simulate real-world panic situations or reset back to safety state.</p>
+              </div>
+            </div>
+            <div class="quick-sim-buttons">
+              <button class="btn-sos-test" onclick="triggerSOS()">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                TEST SOS ALERT
+              </button>
+              <button class="btn-reset-clean" onclick="resetAlert()">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+                RESET ALERT
+              </button>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- ============================================== -->
+        <!-- SECTION 2: EMERGENCY SOS SECTION               -->
+        <!-- ============================================== -->
+        <section id="emergency" class="tab-pane">
+          
+          <div class="section-header-row">
+            <div>
+              <h2 class="section-title">Emergency SOS Center</h2>
+              <p class="section-desc">High-priority trigger control & instant response simulation</p>
+            </div>
+            <div class="sim-notice-badge">
+              <span>Simulation Mode • Zero Actual Dialing</span>
+            </div>
+          </div>
+
+          <div class="emergency-hero-card" id="sosHeroCard">
+            <div class="emergency-left-col">
+              <div class="sos-state-indicator-block">
+                <span class="sos-status-label">Current Emergency Level</span>
+                <h3 class="sos-current-status-title" id="emergencyHeroTitle">SAFE AND SECURE</h3>
+                <p class="sos-current-status-desc" id="emergencyHeroDesc">
+                  The wearable device is armed and continuously monitoring for panic button presses and abrupt fall movements.
+                </p>
+              </div>
+
+              <div class="sos-hardware-telemetry">
+                <div class="telemetry-item">
+                  <span class="telemetry-label">Safety State</span>
+                  <span class="telemetry-val text-green" id="telemetrySafety">SAFE</span>
+                </div>
+                <div class="telemetry-item">
+                  <span class="telemetry-label">RGB Indicator</span>
+                  <span class="telemetry-val text-green" id="telemetryLed">GREEN</span>
+                </div>
+                <div class="telemetry-item">
+                  <span class="telemetry-label">Alarm Buzzer</span>
+                  <span class="telemetry-val text-muted" id="telemetryBuzzer">OFF</span>
+                </div>
+                <div class="telemetry-item">
+                  <span class="telemetry-label">SOS Switch</span>
+                  <span class="telemetry-val text-green" id="telemetrySos">READY</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Big Circular Interactive Button -->
+            <div class="emergency-right-col">
+              <div class="sos-button-wrapper">
+                <div class="sos-pulse-ring" id="sosPulseRing"></div>
+                <button class="sos-big-action-btn" id="sosTriggerButton" onclick="triggerSOS()">
+                  <div class="btn-inner-content">
+                    <svg viewBox="0 0 24 24" class="sos-button-svg" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                    </svg>
+                    <span class="sos-btn-text">TEST SOS ALERT</span>
+                    <span class="sos-btn-sub">Click to Simulate Emergency</span>
+                  </div>
+                </button>
+              </div>
+
+              <div class="reset-button-wrapper">
+                <button class="btn-reset-large" onclick="resetAlert()">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+                  RESET SYSTEM TO SAFE
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Emergency Procedures Reference Card -->
+          <div class="info-grid-2">
+            <div class="card-generic">
+              <h4 class="card-inner-title">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                Simulated ESP32 Hardware Sequence
+              </h4>
+              <ul class="steps-list">
+                <li><span class="step-num">1</span> <strong>Tactile Button Pressed:</strong> ESP32 interrupts GPIO 4 input.</li>
+                <li><span class="step-num">2</span> <strong>Visual Alarm:</strong> Neopixel / RGB LED transitions instantly to flashing <strong>RED</strong>.</li>
+                <li><span class="step-num">3</span> <strong>Auditory Alarm:</strong> High-decibel Piezo Buzzer turns <strong>ON</strong> (2.7 kHz pulse).</li>
+                <li><span class="step-num">4</span> <strong>Cloud Transmission:</strong> Encrypted telemetry packet dispatched to dashboard.</li>
+              </ul>
+            </div>
+
+            <div class="card-generic">
+              <h4 class="card-inner-title">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                Automated Responder Dispatch
+              </h4>
+              <p class="text-muted-sm mb-3">When SOS activates, the following automated notification mock pipeline is initiated:</p>
+              <div class="contact-pill-list">
+                <div class="contact-pill-mini">
+                  <span class="pill-role">Family Primary:</span>
+                  <span class="pill-name">Mother (+91 XXXXX XXXXX)</span>
+                  <span class="pill-status ready">SMS Queued</span>
+                </div>
+                <div class="contact-pill-mini">
+                  <span class="pill-role">Emergency Hotline:</span>
+                  <span class="pill-name">National Helpline (112)</span>
+                  <span class="pill-status ready">GPS Transmit Ready</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- ============================================== -->
+        <!-- SECTION 3: MPU6050 SENSOR SECTION              -->
+        <!-- ============================================== -->
+        <section id="sensors" class="tab-pane">
+          
+          <div class="section-header-row">
+            <div>
+              <h2 class="section-title">MPU6050 6-Axis Motion Telemetry</h2>
+              <p class="section-desc">Real-time tri-axis accelerometer & gyroscope motion telemetry</p>
+            </div>
+            <div class="badge-sim-data">
+              <span class="pulse-dot-amber"></span>
+              SIMULATED SENSOR DATA
+            </div>
+          </div>
+
+          <!-- Sensor Value Display Cards -->
+          <div class="sensor-readings-grid">
+            
+            <!-- Accelerometer Card -->
+            <div class="card-generic sensor-card">
+              <div class="sensor-card-header">
+                <div class="sensor-title-group">
+                  <div class="sensor-icon-box">📐</div>
+                  <div>
+                    <h3 class="sensor-box-title">Accelerometer</h3>
+                    <span class="sensor-box-unit">Units: g (Earth gravity = 9.81 m/s²)</span>
+                  </div>
+                </div>
+                <span class="badge-subtle">±2g Range</span>
+              </div>
+
+              <div class="axis-values-row">
+                <div class="axis-box">
+                  <span class="axis-label">Axis X</span>
+                  <div class="axis-val-wrap">
+                    <span class="axis-val" id="accelX">0.24</span>
+                    <span class="axis-unit">g</span>
+                  </div>
+                  <div class="axis-bar-track">
+                    <div class="axis-bar-fill fill-x" id="accelBarX" style="width: 55%;"></div>
+                  </div>
+                </div>
+
+                <div class="axis-box">
+                  <span class="axis-label">Axis Y</span>
+                  <div class="axis-val-wrap">
+                    <span class="axis-val" id="accelY">0.91</span>
+                    <span class="axis-unit">g</span>
+                  </div>
+                  <div class="axis-bar-track">
+                    <div class="axis-bar-fill fill-y" id="accelBarY" style="width: 72%;"></div>
+                  </div>
+                </div>
+
+                <div class="axis-box highlight-z">
+                  <span class="axis-label">Axis Z (Gravity)</span>
+                  <div class="axis-val-wrap">
+                    <span class="axis-val" id="accelZ">9.72</span>
+                    <span class="axis-unit">m/s²</span>
+                  </div>
+                  <div class="axis-bar-track">
+                    <div class="axis-bar-fill fill-z" id="accelBarZ" style="width: 98%;"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Gyroscope Card -->
+            <div class="card-generic sensor-card">
+              <div class="sensor-card-header">
+                <div class="sensor-title-group">
+                  <div class="sensor-icon-box">🔄</div>
+                  <div>
+                    <h3 class="sensor-box-title">Gyroscope</h3>
+                    <span class="sensor-box-unit">Units: °/s (Angular velocity)</span>
+                  </div>
+                </div>
+                <span class="badge-subtle">±250°/s Range</span>
+              </div>
+
+              <div class="axis-values-row">
+                <div class="axis-box">
+                  <span class="axis-label">Axis X (Roll)</span>
+                  <div class="axis-val-wrap">
+                    <span class="axis-val" id="gyroX">1.20</span>
+                    <span class="axis-unit">°/s</span>
+                  </div>
+                  <div class="axis-bar-track">
+                    <div class="axis-bar-fill fill-gx" id="gyroBarX" style="width: 48%;"></div>
+                  </div>
+                </div>
+
+                <div class="axis-box">
+                  <span class="axis-label">Axis Y (Pitch)</span>
+                  <div class="axis-val-wrap">
+                    <span class="axis-val" id="gyroY">0.85</span>
+                    <span class="axis-unit">°/s</span>
+                  </div>
+                  <div class="axis-bar-track">
+                    <div class="axis-bar-fill fill-gy" id="gyroBarY" style="width: 40%;"></div>
+                  </div>
+                </div>
+
+                <div class="axis-box">
+                  <span class="axis-label">Axis Z (Yaw)</span>
+                  <div class="axis-val-wrap">
+                    <span class="axis-val" id="gyroZ">2.10</span>
+                    <span class="axis-unit">°/s</span>
+                  </div>
+                  <div class="axis-bar-track">
+                    <div class="axis-bar-fill fill-gz" id="gyroBarZ" style="width: 60%;"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Live Dynamic Sensor Waveform Graph -->
+          <div class="card-generic chart-card">
+            <div class="chart-header">
+              <div class="chart-title-group">
+                <h3 class="chart-main-title">Live Motion Stream</h3>
+                <span class="chart-sub">Real-time dynamic oscillation simulation (Updated every 1.5s)</span>
+              </div>
+              <div class="chart-legend">
+                <span class="legend-item"><span class="legend-dot dot-x"></span> Accel X</span>
+                <span class="legend-item"><span class="legend-dot dot-y"></span> Accel Y</span>
+                <span class="legend-item"><span class="legend-dot dot-z"></span> Accel Z</span>
+              </div>
+            </div>
+            
+            <div class="canvas-container">
+              <canvas id="sensorWaveCanvas" width="900" height="220"></canvas>
+            </div>
+
+            <div class="chart-footer-note">
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              <span>Note: Fall detection algorithm will trigger automatic SOS if acceleration drops below 0.3g followed by high impact spike (>3.5g).</span>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- ============================================== -->
+        <!-- SECTION 4: ALERT HISTORY                       -->
+        <!-- ============================================== -->
+        <section id="history" class="tab-pane">
+          
+          <div class="section-header-row">
+            <div>
+              <h2 class="section-title">Alert & Event History</h2>
+              <p class="section-desc">Audit trail of triggered alarms, motion anomalies, and safety checks</p>
+            </div>
+            <div class="actions-group">
+              <button class="btn-secondary" onclick="exportAlerts()">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export Log
+              </button>
+              <button class="btn-secondary" onclick="clearHistoryConfirmation()">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                Clear
+              </button>
+            </div>
+          </div>
+
+          <!-- Table Container Card -->
+          <div class="card-generic table-card">
+            <div class="table-responsive">
+              <table class="data-table" id="alertsTable">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>Alert Type</th>
+                    <th>Device</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="alertsTableBody">
+                  <!-- Records dynamically rendered or initialized via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- ============================================== -->
+        <!-- SECTION 5: DEVICE HARDWARE STATUS              -->
+        <!-- ============================================== -->
+        <section id="device" class="tab-pane">
+          
+          <div class="section-header-row">
+            <div>
+              <h2 class="section-title">Hardware Architecture & Peripherals</h2>
+              <p class="section-desc">Physical components and communication pinout overview for ESP32</p>
+            </div>
+            <div class="badge-subtle">Target Platform: ESP32 NodeMCU</div>
+          </div>
+
+          <!-- Hardware Components Grid -->
+          <div class="hardware-grid">
+            
+            <!-- Component 1: ESP32 -->
+            <div class="card-generic hardware-item-card">
+              <div class="hardware-icon-wrap">
+                <svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" stroke-width="2" fill="none"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>
+              </div>
+              <div class="hardware-details">
+                <div class="hw-top-row">
+                  <h4 class="hw-name">ESP32 Microcontroller</h4>
+                  <span class="badge-status-green">Online</span>
+                </div>
+                <p class="hw-desc">Dual-core Tensilica LX6, 240MHz, 520KB SRAM with integrated 2.4GHz Wi-Fi and Bluetooth.</p>
+                <div class="hw-specs">
+                  <span>Core Voltage: 3.3V</span>
+                  <span>Firmware: v1.0.4-sim</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Component 2: MPU6050 -->
+            <div class="card-generic hardware-item-card">
+              <div class="hardware-icon-wrap">
+                <svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/></svg>
+              </div>
+              <div class="hardware-details">
+                <div class="hw-top-row">
+                  <h4 class="hw-name">MPU6050 IMU Sensor</h4>
+                  <span class="badge-status-green">Connected</span>
+                </div>
+                <p class="hw-desc">6-axis MotionTracking device combining 3-axis gyroscope and 3-axis accelerometer.</p>
+                <div class="hw-specs">
+                  <span>Protocol: I2C (SDA/SCL)</span>
+                  <span>Pins: GPIO 21 & 22</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Component 3: SOS Button -->
+            <div class="card-generic hardware-item-card">
+              <div class="hardware-icon-wrap">
+                <svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" stroke-width="2" fill="none"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              </div>
+              <div class="hardware-details">
+                <div class="hw-top-row">
+                  <h4 class="hw-name">SOS Emergency Button</h4>
+                  <span class="badge-status-green" id="hwSosBadge">Ready</span>
+                </div>
+                <p class="hw-desc">Momentary tactile push button with debouncing filter and hardware interrupt trigger.</p>
+                <div class="hw-specs">
+                  <span>Pin: GPIO 4 (Pull-up)</span>
+                  <span>Trigger: Active LOW</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Component 4: RGB LED -->
+            <div class="card-generic hardware-item-card">
+              <div class="hardware-icon-wrap">
+                <svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" stroke-width="2" fill="none"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+              </div>
+              <div class="hardware-details">
+                <div class="hw-top-row">
+                  <h4 class="hw-name">RGB Status LED</h4>
+                  <span class="badge-status-green" id="hwLedBadge">Green (Safe)</span>
+                </div>
+                <p class="hw-desc">Visual color feedback indicator for user state (Green = Safe, Red = SOS Alert, Blue = Syncing).</p>
+                <div class="hw-specs">
+                  <span>Pins: GPIO 16, 17, 18</span>
+                  <span>Type: Common Cathode</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Component 5: Piezo Buzzer -->
+            <div class="card-generic hardware-item-card">
+              <div class="hardware-icon-wrap">
+                <svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" stroke-width="2" fill="none"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+              </div>
+              <div class="hardware-details">
+                <div class="hw-top-row">
+                  <h4 class="hw-name">Active Piezo Buzzer</h4>
+                  <span class="badge-status-gray" id="hwBuzzerBadge">OFF</span>
+                </div>
+                <p class="hw-desc">Acoustic alarm for deterrence and alerting nearby people during emergency situations.</p>
+                <div class="hw-specs">
+                  <span>Pin: GPIO 5</span>
+                  <span>Volume: 85-90 dB</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Component 6: Wi-Fi -->
+            <div class="card-generic hardware-item-card">
+              <div class="hardware-icon-wrap">
+                <svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" stroke-width="2" fill="none"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+              </div>
+              <div class="hardware-details">
+                <div class="hw-top-row">
+                  <h4 class="hw-name">Wi-Fi Transceiver</h4>
+                  <span class="badge-status-green">Connected</span>
+                </div>
+                <p class="hw-desc">802.11 b/g/n wireless connectivity for cloud dashboard sync and SOS push alerts.</p>
+                <div class="hw-specs">
+                  <span>SSID: SafeHer-Mesh-IoT</span>
+                  <span>IP: 192.168.1.104 (Simulated)</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+        </section>
+
+        <!-- ============================================== -->
+        <!-- SECTION 6: EMERGENCY CONTACTS                  -->
+        <!-- ============================================== -->
+        <section id="contacts" class="tab-pane">
+          
+          <div class="section-header-row">
+            <div>
+              <h2 class="section-title">Emergency Contacts Directory</h2>
+              <p class="section-desc">Designated guardians and emergency services configured for instant dispatch</p>
+            </div>
+            <button class="btn-primary" onclick="showAddContactModal()">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Contact
+            </button>
+          </div>
+
+          <!-- Contacts Cards Grid -->
+          <div class="contacts-grid" id="contactsGrid">
+            
+            <!-- Contact 1: Mother -->
+            <div class="card-generic contact-card">
+              <div class="contact-header">
+                <div class="contact-avatar bg-pink-soft">👩</div>
+                <div class="contact-meta">
+                  <h4 class="contact-name">Mother</h4>
+                  <span class="contact-rel">Primary Guardian • Priority 1</span>
+                </div>
+              </div>
+              <div class="contact-body">
+                <div class="contact-info-row">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                  <span>+91 98765 43210</span>
+                </div>
+                <div class="contact-info-row">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                  <span>mother@safeher-mock.com</span>
+                </div>
+              </div>
+              <div class="contact-footer">
+                <span class="badge-status-green">SMS & Call Active</span>
+                <span class="contact-action-btn" title="Simulate call">📞 Test Dial</span>
+              </div>
+            </div>
+
+            <!-- Contact 2: Friend -->
+            <div class="card-generic contact-card">
+              <div class="contact-header">
+                <div class="contact-avatar bg-indigo-soft">🧑</div>
+                <div class="contact-meta">
+                  <h4 class="contact-name">Friend (Sneha)</h4>
+                  <span class="contact-rel">Secondary Contact • Priority 2</span>
+                </div>
+              </div>
+              <div class="contact-body">
+                <div class="contact-info-row">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                  <span>+91 91234 56789</span>
+                </div>
+                <div class="contact-info-row">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                  <span>sneha.friend@safeher-mock.com</span>
+                </div>
+              </div>
+              <div class="contact-footer">
+                <span class="badge-status-green">SMS Active</span>
+                <span class="contact-action-btn" title="Simulate call">📞 Test Dial</span>
+              </div>
+            </div>
+
+            <!-- Contact 3: Emergency Services -->
+            <div class="card-generic contact-card service-highlight">
+              <div class="contact-header">
+                <div class="contact-avatar bg-red-soft">🚨</div>
+                <div class="contact-meta">
+                  <h4 class="contact-name">Emergency Services (ERSS)</h4>
+                  <span class="contact-rel">National Emergency Response (Police / Ambulance)</span>
+                </div>
+              </div>
+              <div class="contact-body">
+                <div class="contact-info-row">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                  <strong class="text-white">Emergency Hotline: 112 / 1091</strong>
+                </div>
+                <div class="contact-info-row">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                  <span>Auto GPS Geolocation Dispatch</span>
+                </div>
+              </div>
+              <div class="contact-footer">
+                <span class="badge-sos-nav">Instant Priority</span>
+                <span class="contact-action-btn" title="Simulate call">🚨 Official Dispatch</span>
+              </div>
+            </div>
+
+          </div>
+
+        </section>
+
+        <!-- ============================================== -->
+        <!-- SECTION 7: SETTINGS & CONFIGURATION            -->
+        <!-- ============================================== -->
+        <section id="settings" class="tab-pane">
+          
+          <div class="section-header-row">
+            <div>
+              <h2 class="section-title">System Settings & Calibration</h2>
+              <p class="section-desc">Configure detection sensitivity, simulation parameters, and future IoT endpoints</p>
+            </div>
+          </div>
+
+          <div class="settings-grid">
+            
+            <div class="card-generic settings-block">
+              <h4 class="card-inner-title">Simulation Controls</h4>
+              <div class="form-group">
+                <label class="form-label">Sensor Refresh Interval</label>
+                <select class="form-select" id="refreshIntervalSelect" onchange="updateSimInterval(this.value)">
+                  <option value="1500" selected>1.5 Seconds (Default Live)</option>
+                  <option value="3000">3.0 Seconds (Slow)</option>
+                  <option value="800">0.8 Seconds (Fast Telemetry)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Simulated Fall Sensitivity Threshold</label>
+                <input type="range" class="form-range" min="1.5" max="5.0" step="0.1" value="3.2" id="fallSensRange" oninput="document.getElementById('sensVal').innerText = this.value + 'g'">
+                <div class="range-labels">
+                  <span>Sensitive (1.5g)</span>
+                  <span id="sensVal" class="text-cyan font-bold">3.2g</span>
+                  <span>Heavy Impact (5.0g)</span>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Simulate Device Connectivity</label>
+                <div class="toggle-row">
+                  <span>Simulate ESP32 Online State</span>
+                  <label class="switch">
+                    <input type="checkbox" id="deviceOnlineToggle" checked onchange="toggleDeviceOnline(this.checked)">
+                    <span class="slider round"></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="card-generic settings-block">
+              <h4 class="card-inner-title">Future ESP32 Integration Blueprint</h4>
+              <p class="text-muted-sm mb-3">
+                In Phase 2, this section will host your REST / WebSocket or Firebase connection credentials:
+              </p>
+              <div class="form-group">
+                <label class="form-label">ESP32 REST Endpoint (Future URL)</label>
+                <input type="text" class="form-input" value="http://192.168.1.104/api/v1/telemetry" placeholder="http://esp32-ip/api" disabled>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Cloud Backend Webhook (Future)</label>
+                <input type="text" class="form-input" value="https://safeher-api.onrender.com/webhook/alerts" placeholder="https://..." disabled>
+              </div>
+              <div class="note-box">
+                <span class="note-icon">💡</span>
+                <span>All functions in <code>script.js</code> are designed with clean stubbed placeholders (e.g. <code>getSensorData()</code>, <code>triggerSOS()</code>) ready for API replacement.</span>
+              </div>
+            </div>
+
+          </div>
+
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Simple Modal for Add Contact UI -->
+  <div class="modal-overlay" id="contactModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Add Emergency Contact</h3>
+        <button class="btn-icon" onclick="closeAddContactModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Contact Name / Relationship</label>
+          <input type="text" class="form-input" id="newContactName" placeholder="e.g. Sister, Father, Neighbor">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phone Number</label>
+          <input type="text" class="form-input" id="newContactPhone" placeholder="+91 XXXXX XXXXX">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email Address (Optional)</label>
+          <input type="email" class="form-input" id="newContactEmail" placeholder="contact@example.com">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeAddContactModal()">Cancel</button>
+        <button class="btn-primary" onclick="saveNewContact()">Save Contact</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript File -->
+  <script type="module" src="script.js"></script>
+</body>
+</html>
+
