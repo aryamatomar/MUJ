@@ -20,14 +20,14 @@ const app = express();
 const server = http.createServer(app);
 
 const PORT = process.env.PORT || 5000;
+const HOST = '0.0.0.0';
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 
-// Setup Socket.IO with CORS
+// Setup Socket.IO with CORS (Allows deployed frontend, Vercel/Render URLs, and local development)
 const io = new Server(server, {
   cors: {
-    origin: [CLIENT_URL, 'http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3000', '*'],
+    origin: '*',
     methods: ['GET', 'POST'],
-    credentials: true,
   },
 });
 
@@ -37,7 +37,7 @@ app.set('io', io);
 // Middleware
 app.use(
   cors({
-    origin: '*', // Allow all origins for ESP32 & local dev convenience
+    origin: '*', // Allow all origins for ESP8266 IoT devices, mobile browsers & web frontends
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
@@ -51,11 +51,23 @@ app.use((req, res, next) => {
   next();
 });
 
+// Root endpoint for deployment uptime ping
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'online',
+    service: 'SafeHer IoT & Emergency Monitoring Backend',
+    health: '/api/health',
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.status(200).json({
     success: true,
     message: 'SafeHer backend is running',
+    environment: process.env.NODE_ENV || 'development',
+    port: PORT,
     database: isDbConnected() ? 'connected' : 'memory_fallback_active',
     socket: 'ready',
     timestamp: new Date().toISOString(),
@@ -66,6 +78,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/device', deviceRoutes);
 app.use('/api/sensor', sensorRoutes);
 app.use('/api/alerts', alertRoutes);
+app.use('/api/incidents', alertRoutes); // Alias for incidents / audit trail
 app.use('/api/demo', demoRoutes);
 app.use('/api/location', locationRoutes);
 
@@ -111,12 +124,12 @@ io.on('connection', async (socket) => {
 const startServer = async () => {
   await connectDB();
 
-  server.listen(PORT, () => {
+  server.listen(PORT, HOST, () => {
     console.log(`
 ======================================================
   🛡️  SafeHer Women Safety IoT Backend Server
-  🚀  Running on: http://localhost:${PORT}
-  📡  Health Check: http://localhost:${PORT}/api/health
+  🚀  Listening on: http://${HOST}:${PORT} (Port: ${PORT})
+  📡  Health Check: /api/health
   🔌  Socket.IO: Ready for real-time telemetry & SOS
   🗄️   Database: ${isDbConnected() ? 'MongoDB Connected' : 'In-Memory Fallback Active'}
 ======================================================

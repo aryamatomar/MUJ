@@ -5,10 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SafeHer — Women Safety Monitoring System</title>
   <meta name="description" content="SafeHer IoT Women Safety Monitoring System - Interactive Dashboard Prototype" />
-  <!-- Google Fonts -->
+  <!-- Google Fonts: Inter, Plus Jakarta Sans, JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
   <!-- Leaflet CSS & JS for Admin Real-Time Emergency Map -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -178,11 +180,11 @@
           </div>
           <div class="banner-text">
             <h4>CRITICAL EMERGENCY ALERT TRIGGERED</h4>
-            <p>SOS trigger detected from Node <strong>WS-001</strong>. Simulated buzzer is sounding and RGB LED is flashing red.</p>
+            <p>SOS trigger detected from Node <strong>WS-001</strong>.</p>
           </div>
           <button class="btn-banner-reset" onclick="resetAlert()">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
-            Reset Alert
+            RESET ALERT
           </button>
         </div>
       </div>
@@ -374,6 +376,8 @@
                   <span class="badge-subtle">Log Active</span>
                 </div>
               </div>
+            </div>
+
             <!-- Card 9: Emergency Live GPS Sharing Status (PRIVACY: ONLY ACTIVE DURING SOS) -->
             <div class="status-card" id="cardGpsSharing">
               <div class="card-header">
