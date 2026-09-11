@@ -126,6 +126,14 @@ io.on('connection', async (socket) => {
 const startServer = async () => {
   await connectDB();
 
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.log(`📡 Port ${PORT} is already in use. Reusing active server on http://${HOST}:${PORT}`);
+    } else {
+      console.error('Server error:', err);
+    }
+  });
+
   server.listen(PORT, HOST, () => {
     console.log(`
 ======================================================

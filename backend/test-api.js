@@ -1,4 +1,9 @@
+import { app, server } from './server.js';
+import mongoose from 'mongoose';
+
 const runTests = async () => {
+  // Allow server initialization
+  await new Promise((resolve) => setTimeout(resolve, 1500));
   const BASE_URL = 'http://localhost:5000/api';
 
   console.log('🧪 Starting SafeHer API Verification Suite...\n');
@@ -70,4 +75,12 @@ const runTests = async () => {
   console.log('\n✅ ALL BACKEND REST APIS AND MONGO STORAGE VERIFIED SUCCESSFULLY!');
 };
 
-runTests().catch(console.error);
+runTests()
+  .catch(console.error)
+  .finally(async () => {
+    if (server && server.listening) {
+      server.close();
+    }
+    await mongoose.disconnect();
+    process.exit();
+  });

@@ -27,8 +27,17 @@ export const updateLocation = async (req, res, next) => {
       });
     }
 
+    let deviceOwnerId = null;
+    if (isDbConnected()) {
+      const dev = await Device.findOne({ deviceId });
+      if (dev && dev.userId) {
+        deviceOwnerId = dev.userId;
+      }
+    }
+
     const locData = {
       deviceId,
+      userId: deviceOwnerId,
       latitude: Number(latitude),
       longitude: Number(longitude),
       accuracy: accuracy !== null && accuracy !== undefined ? Number(accuracy) : null,

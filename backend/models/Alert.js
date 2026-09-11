@@ -9,6 +9,17 @@ const alertSchema = new mongoose.Schema(
       default: 'SAFEHER-001',
       index: true,
     },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
+    },
+    username: {
+      type: String,
+      default: null,
+      trim: true,
+    },
     type: {
       type: String,
       enum: ['SOS Button', 'Fall Detection', 'Abnormal Motion', 'Test Alert', 'Manual Alert'],

@@ -1,5 +1,26 @@
 import mongoose from 'mongoose';
 
+const emergencyContactSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: [true, 'Contact name is required'],
+      trim: true,
+    },
+    phone: {
+      type: String,
+      required: [true, 'Contact phone is required'],
+      trim: true,
+    },
+    relationship: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+  },
+  { _id: true }
+);
+
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -39,6 +60,14 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: 'SAFEHER-001',
+    },
+    emergencyContacts: {
+      type: [emergencyContactSchema],
+      default: [],
+      validate: [
+        (val) => val.length <= 3,
+        'Maximum 3 emergency contacts allowed',
+      ],
     },
   },
   {

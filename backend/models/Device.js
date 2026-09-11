@@ -9,6 +9,12 @@ const deviceSchema = new mongoose.Schema(
       trim: true,
       default: 'SAFEHER-001',
     },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
+    },
     deviceName: {
       type: String,
       default: 'SafeHer Band',

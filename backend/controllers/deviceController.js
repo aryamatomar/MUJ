@@ -1,4 +1,5 @@
 import Device from '../models/Device.js';
+import User from '../models/User.js';
 import { isDbConnected } from '../config/db.js';
 
 // In-memory fallback state if MongoDB is offline
@@ -175,6 +176,163 @@ export const resetDevice = async (req, res, next) => {
       success: true,
       message: 'Device alert state reset to SAFE successfully.',
       data: updatedDevice,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/device/claim
+ * Associates an authenticated USER with an ESP8266 device
+ */
+export const claimDevice = async (req, res, next) => {
+  try {
+    if (!isDbConnected()) {
+      return res.status(503).json({
+        success: false,
+        message: 'Device service temporarily unavailable.',
+      });
+    }
+
+    const { deviceId } = req.body;
+    if (!deviceId || typeof deviceId !== 'string' || !deviceId.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'deviceId is required.',
+      });
+    }
+
+    const cleanDeviceId = deviceId.trim();
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication token required.',
+      });
+    }
+
+    // 1. Find device by deviceId
+    const device = await Device.findOne({ deviceId: cleanDeviceId });
+    if (!device) {
+      return res.status(404).json({
+        success: false,
+        message: `Device with ID '${cleanDeviceId}' not found.`,
+      });
+    }
+
+    // 2. Check if device is already claimed by another user
+    if (device.userId && device.userId.toString() !== userId) {
+      return res.status(409).json({
+        success: false,
+        message: 'Device is already claimed by another user.',
+      });
+    }
+
+    // 3. Ensure 1-to-1 user-device association: unassign any previously claimed device for this user
+    await Device.updateMany(
+      { userId, _id: { $ne: device._id } },
+      { $set: { userId: null } }
+    );
+
+    // 4. Assign logged-in user's ID to device
+    device.userId = userId;
+    await device.save();
+
+    // 4. Update user's deviceId
+    const user = await User.findById(userId);
+    if (user) {
+      user.deviceId = device.deviceId;
+      await user.save();
+    }
+
+    // 5. Broadcast device update over Socket.IO if available
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('deviceStatus', device);
+    }
+
+    // 6. Return deviceId and owner info (never exposing passwordHash)
+    return res.status(200).json({
+      success: true,
+      message: `Device '${device.deviceId}' successfully claimed.`,
+      data: {
+        deviceId: device.deviceId,
+        deviceName: device.deviceName,
+        status: device.status,
+        safetyStatus: device.safetyStatus,
+        owner: user
+          ? {
+              id: user._id.toString(),
+              name: user.name,
+              username: user.username,
+              email: user.email,
+              role: user.role,
+            }
+          : { id: userId },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/device/my-device
+ * Returns the device associated with the logged-in user
+ */
+export const getMyDevice = async (req, res, next) => {
+  try {
+    if (!isDbConnected()) {
+      return res.status(503).json({
+        success: false,
+        message: 'Device service temporarily unavailable.',
+      });
+    }
+
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication token required.',
+      });
+    }
+
+    // Find device assigned to this user
+    const device = await Device.findOne({ userId }).populate('userId', 'name username email role deviceId');
+    if (!device) {
+      return res.status(404).json({
+        success: false,
+        message: 'No device associated with this account.',
+      });
+    }
+
+    const owner = device.userId
+      ? {
+          id: device.userId._id ? device.userId._id.toString() : device.userId.toString(),
+          name: device.userId.name,
+          username: device.userId.username,
+          email: device.userId.email,
+          role: device.userId.role,
+        }
+      : null;
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        deviceId: device.deviceId,
+        deviceName: device.deviceName,
+        status: device.status,
+        safetyStatus: device.safetyStatus,
+        sosButton: device.sosButton,
+        buzzer: device.buzzer,
+        rgbLed: device.rgbLed,
+        wifiSignal: device.wifiSignal,
+        lastSeen: device.lastSeen,
+        userId: device.userId?._id ? device.userId._id.toString() : device.userId,
+        owner,
+      },
     });
   } catch (error) {
     next(error);

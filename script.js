@@ -159,6 +159,51 @@ function hideAuthAlert() {
   if (alertBox) alertBox.className = "auth-alert-banner";
 }
 
+// Track Selected Login Role ('user' | 'admin')
+let selectedLoginRole = "user"; // default: 'user'
+
+function selectLoginRole(role) {
+  selectedLoginRole = role === "admin" ? "admin" : "user";
+
+  const btnUser = document.getElementById("roleBtnUser");
+  const btnAdmin = document.getElementById("roleBtnAdmin");
+  const submitText = document.getElementById("loginSubmitBtnText");
+
+  if (selectedLoginRole === "admin") {
+    if (btnUser) btnUser.classList.remove("active");
+    if (btnAdmin) btnAdmin.classList.add("active");
+    if (submitText) submitText.innerText = "Login as Admin";
+  } else {
+    if (btnAdmin) btnAdmin.classList.remove("active");
+    if (btnUser) btnUser.classList.add("active");
+    if (submitText) submitText.innerText = "Login as User";
+  }
+}
+
+// Track Selected Registration Role ('user' | 'admin')
+let selectedRegisterRole = "user"; // default: 'user'
+
+function selectRegisterRole(role) {
+  selectedRegisterRole = role === "admin" ? "admin" : "user";
+
+  const btnUser = document.getElementById("regRoleBtnUser");
+  const btnAdmin = document.getElementById("regRoleBtnAdmin");
+  const adminSecretGroup = document.getElementById("regAdminSecretGroup");
+  const submitText = document.getElementById("registerSubmitBtnText");
+
+  if (selectedRegisterRole === "admin") {
+    if (btnUser) btnUser.classList.remove("active");
+    if (btnAdmin) btnAdmin.classList.add("active");
+    if (adminSecretGroup) adminSecretGroup.style.display = "block";
+    if (submitText) submitText.innerText = "Create Admin Account";
+  } else {
+    if (btnAdmin) btnAdmin.classList.remove("active");
+    if (btnUser) btnUser.classList.add("active");
+    if (adminSecretGroup) adminSecretGroup.style.display = "none";
+    if (submitText) submitText.innerText = "Create User Account";
+  }
+}
+
 async function handleLoginSubmit(event) {
   if (event) event.preventDefault();
   hideAuthAlert();
@@ -177,14 +222,19 @@ async function handleLoginSubmit(event) {
 
   if (submitBtn) {
     submitBtn.disabled = true;
-    submitBtn.innerHTML = `<span>Signing in...</span>`;
+    submitBtn.innerHTML = `<span>Signing in as ${selectedLoginRole.toUpperCase()}...</span>`;
   }
 
   try {
+    // Submit credentials along with chosen role
     const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ 
+        username, 
+        password,
+        role: selectedLoginRole 
+      }),
     });
 
     const data = await res.json();
@@ -198,13 +248,17 @@ async function handleLoginSubmit(event) {
     authStorage.setToken(data.token);
     authStorage.setUser(data.user);
     updateHeaderAuthUI();
-    showToast(`Welcome, ${data.user.name || data.user.username}!`, "success");
+    showToast(`Welcome back, ${data.user.name || data.user.username}!`, "success");
 
     // Clear password input
     if (passwordInput) passwordInput.value = "";
 
-    // Route based on role
-    if (data.user.role === "ADMIN") {
+    // Sync emergency contacts and device from MongoDB for this authenticated user
+    loadEmergencyContactsFromBackend();
+    loadMyDeviceFromBackend();
+
+    // Conditional post-login redirection based on selected role / privileges
+    if (selectedLoginRole === "admin" || data.user.role === "ADMIN") {
       navigateToRoute("/admin");
     } else {
       navigateToRoute("/user");
@@ -231,6 +285,7 @@ async function handleRegisterSubmit(event) {
   const emailInput = document.getElementById("registerEmail");
   const passwordInput = document.getElementById("registerPassword");
   const confirmPasswordInput = document.getElementById("registerConfirmPassword");
+  const adminSecretInput = document.getElementById("registerAdminSecret");
   const submitBtn = document.getElementById("btnRegisterSubmit");
 
   const name = nameInput ? nameInput.value.trim() : "";
@@ -238,10 +293,17 @@ async function handleRegisterSubmit(event) {
   const email = emailInput ? emailInput.value.trim() : "";
   const password = passwordInput ? passwordInput.value : "";
   const confirmPassword = confirmPasswordInput ? confirmPasswordInput.value : "";
+  const adminSecret = adminSecretInput ? adminSecretInput.value.trim() : "";
 
   // 1. Required fields
   if (!name || !username || !email || !password || !confirmPassword) {
     showAuthAlert("All fields are required.", "danger");
+    return;
+  }
+
+  // 1b. If admin role is selected, validate invite passcode presence
+  if (selectedRegisterRole === "admin" && !adminSecret) {
+    showAuthAlert("Admin Secret Key / Invite Code is required to create an Administrator account.", "danger");
     return;
   }
 
@@ -272,14 +334,25 @@ async function handleRegisterSubmit(event) {
 
   if (submitBtn) {
     submitBtn.disabled = true;
-    submitBtn.innerHTML = `<span>Creating Account...</span>`;
+    submitBtn.innerHTML = `<span>Creating ${selectedRegisterRole.toUpperCase()} Account...</span>`;
   }
 
   try {
+    const payload = {
+      name,
+      username,
+      email,
+      password,
+      role: selectedRegisterRole,
+    };
+    if (selectedRegisterRole === "admin") {
+      payload.adminSecret = adminSecret;
+    }
+
     const res = await fetch(`${BACKEND_URL}/api/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, username, email, password }),
+      body: JSON.stringify(payload),
     });
 
     const data = await res.json();
@@ -289,8 +362,9 @@ async function handleRegisterSubmit(event) {
       return;
     }
 
-    // Success: switch to login tab and prefill username
+    // Success: switch to login tab, prefill username, and align login role
     switchAuthTab("login");
+    selectLoginRole(selectedRegisterRole);
     const loginUsernameInput = document.getElementById("loginUsername");
     if (loginUsernameInput) loginUsernameInput.value = username;
 
@@ -300,9 +374,10 @@ async function handleRegisterSubmit(event) {
     if (emailInput) emailInput.value = "";
     if (passwordInput) passwordInput.value = "";
     if (confirmPasswordInput) confirmPasswordInput.value = "";
+    if (adminSecretInput) adminSecretInput.value = "";
 
-    showAuthAlert("Account created successfully! Please sign in with your password.", "success");
-    showToast("Account created! Please sign in.", "success");
+    showAuthAlert(`Account created successfully as ${data.user?.role || selectedRegisterRole.toUpperCase()}! Please sign in.`, "success");
+    showToast(`Account created as ${data.user?.role || selectedRegisterRole.toUpperCase()}! Please sign in.`, "success");
   } catch (err) {
     showAuthAlert("Network/server error. Could not connect to SafeHer backend.", "danger");
   } finally {
@@ -310,7 +385,7 @@ async function handleRegisterSubmit(event) {
       submitBtn.disabled = false;
       submitBtn.innerHTML = `
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
-        <span>Create Account</span>
+        <span id="registerSubmitBtnText">${selectedRegisterRole === "admin" ? "Create Admin Account" : "Create User Account"}</span>
       `;
     }
   }
@@ -321,6 +396,10 @@ function handleLogout() {
   authStorage.clear();
   updateHeaderAuthUI();
   showToast(`Signed out of ${user?.name || "SafeHer"}.`, "info");
+  userEmergencyContacts = [];
+  renderEmergencyContacts();
+  currentUserDevice = null;
+  renderMyDeviceSection();
   navigateToRoute("/login");
   showAuthAlert("You have logged out successfully.", "success");
 }
@@ -428,6 +507,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Init canvas wave drawing loop
   initSensorWaveform();
+
+  // Load authenticated user emergency contacts & device from MongoDB
+  if (authStorage.isAuthenticated()) {
+    loadEmergencyContactsFromBackend();
+    loadMyDeviceFromBackend();
+  }
 
   // Connect to Node.js & Socket.IO backend
   initBackendConnection();
@@ -556,6 +641,10 @@ function initBackendConnection() {
       hardwareState.lastPingTime = new Date();
       emergencyStartTime = new Date();
 
+      // Capture associated username for Admin dashboard attribution
+      const alertUsername = payload?.username || payload?.alert?.username || payload?.user?.username || null;
+      currentActiveSosUser = alertUsername;
+
       if (payload && payload.alert) {
         const alert = payload.alert;
         activeIncidentId = alert._id ? `INC-${String(alert._id).slice(-6).toUpperCase()}` : `INC-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -565,6 +654,7 @@ function initBackendConnection() {
           time: formatTimeAMPM(alert.timestamp ? new Date(alert.timestamp) : new Date()),
           type: alert.type || "SOS Button",
           device: alert.deviceId || hardwareState.deviceId,
+          username: alertUsername,
           status: "Active Alert",
           statusType: "danger"
         });
@@ -577,7 +667,10 @@ function initBackendConnection() {
 
       updateDashboard();
       playSimulatedBeep();
-      showToast("🚨 EMERGENCY SOS BROADCAST RECEIVED! Device in alarm state.", "danger");
+      const toastMsg = alertUsername
+        ? `🚨 EMERGENCY SOS BROADCAST: User @${alertUsername} triggered alarm!`
+        : "🚨 EMERGENCY SOS BROADCAST RECEIVED! Device in alarm state.";
+      showToast(toastMsg, "danger");
     });
 
     // --- REAL-TIME EVENT: ALERT RESOLVED / RESET ---
@@ -589,6 +682,7 @@ function initBackendConnection() {
       hardwareState.buzzer = "OFF";
       hardwareState.rgbLed = "GREEN";
       hardwareState.lastPingTime = new Date();
+      currentActiveSosUser = null;
 
       // Stop Geolocation tracking immediately
       stopEmergencyGPS();
@@ -1263,30 +1357,52 @@ function switchView(route) {
   updateHeaderAuthUI();
 
   if (currentRoute === "/login") {
+    // -----------------------------------------------------------------
+    // STANDALONE AUTH LAYOUT:
+    // Completely hide sidebar, top header, and dashboard components
+    // -----------------------------------------------------------------
+    document.body.classList.add("layout-auth");
+    document.body.classList.remove("layout-dashboard");
+
     if (viewUser) viewUser.classList.remove("active");
     if (viewAdmin) viewAdmin.classList.remove("active");
     if (viewAuth) viewAuth.classList.add("active");
     if (btnUser) btnUser.classList.remove("active");
     if (btnAdmin) btnAdmin.classList.remove("active");
-  } else if (currentRoute === "/admin") {
-    if (viewAuth) viewAuth.classList.remove("active");
-    if (viewUser) viewUser.classList.remove("active");
-    if (viewAdmin) viewAdmin.classList.add("active");
-    if (btnUser) btnUser.classList.remove("active");
-    if (btnAdmin) btnAdmin.classList.add("active");
-
-    // Initialize Leaflet map and force layout recalculation
-    initAdminMap();
-    setTimeout(() => {
-      if (adminMap) adminMap.invalidateSize();
-    }, 120);
   } else {
-    // /user view
+    // -----------------------------------------------------------------
+    // PROTECTED DASHBOARD LAYOUT:
+    // Render sidebar, top header, and dashboard components
+    // -----------------------------------------------------------------
+    document.body.classList.remove("layout-auth");
+    document.body.classList.add("layout-dashboard");
+
     if (viewAuth) viewAuth.classList.remove("active");
-    if (viewAdmin) viewAdmin.classList.remove("active");
-    if (viewUser) viewUser.classList.add("active");
-    if (btnAdmin) btnAdmin.classList.remove("active");
-    if (btnUser) btnUser.classList.add("active");
+
+    if (currentRoute === "/admin") {
+      if (viewUser) viewUser.classList.remove("active");
+      if (viewAdmin) viewAdmin.classList.add("active");
+      if (btnUser) btnUser.classList.remove("active");
+      if (btnAdmin) btnAdmin.classList.add("active");
+
+      // Initialize Leaflet map and force layout recalculation
+      initAdminMap();
+      setTimeout(() => {
+        if (adminMap) adminMap.invalidateSize();
+      }, 120);
+    } else {
+      // /user view
+      if (viewAdmin) viewAdmin.classList.remove("active");
+      if (viewUser) viewUser.classList.add("active");
+      if (btnAdmin) btnAdmin.classList.remove("active");
+      if (btnUser) btnUser.classList.add("active");
+
+      // Sync emergency contacts & device from MongoDB
+      if (authStorage.isAuthenticated()) {
+        loadEmergencyContactsFromBackend();
+        loadMyDeviceFromBackend();
+      }
+    }
   }
 
   if (headerAdminBadge) {
@@ -1570,7 +1686,13 @@ function updateDashboard() {
         adminHeroTitle.innerText = "🔴 EMERGENCY ACTIVE";
         adminHeroTitle.className = "admin-hero-title emergency";
       }
-      if (adminHeroSub) adminHeroSub.innerText = "CRITICAL SOS IN PROGRESS: Real-time telemetry and browser GPS streaming.";
+      if (adminHeroSub) {
+        if (currentActiveSosUser) {
+          adminHeroSub.innerText = `CRITICAL SOS IN PROGRESS: Alert triggered by User @${currentActiveSosUser} (Device: ${hardwareState.deviceId}). Real-time telemetry and browser GPS streaming.`;
+        } else {
+          adminHeroSub.innerText = "CRITICAL SOS IN PROGRESS: Real-time telemetry and browser GPS streaming.";
+        }
+      }
       if (btnAdminResolve) btnAdminResolve.style.display = "inline-flex";
       if (headerAdminBadge) {
         headerAdminBadge.innerText = "EMERGENCY";
@@ -1598,7 +1720,7 @@ function updateDashboard() {
       adminSosVal.innerText = "ACTIVATED";
       adminSosVal.className = "text-red";
       adminSosDot.className = "status-indicator status-red";
-      if (adminSosSub) adminSosSub.innerText = "SOS Button Triggered";
+      if (adminSosSub) adminSosSub.innerText = currentActiveSosUser ? `Triggered by @${currentActiveSosUser}` : "SOS Button Triggered";
     } else {
       adminSosVal.innerText = "READY";
       adminSosVal.className = "text-green";
@@ -1611,6 +1733,11 @@ function updateDashboard() {
     adminDeviceVal.innerText = hardwareState.deviceStatus;
     adminDeviceVal.className = isOnline ? "text-green" : "text-muted";
     adminDeviceDot.className = isOnline ? "status-indicator status-green" : "status-indicator status-gray";
+    if (adminDeviceSub) {
+      adminDeviceSub.innerText = currentActiveSosUser
+        ? `Node: ${hardwareState.deviceId} • @${currentActiveSosUser}`
+        : `Node: ${hardwareState.deviceId}`;
+    }
   }
 
   if (adminMotionVal && adminMotionDot) {
@@ -1817,10 +1944,10 @@ function renderAlertHistory() {
           ${item.type}
         </span>
       </td>
-      <td><code>${item.device}</code></td>
+      <td><code>${item.device}</code>${item.username ? ` <span class="badge-role user-role-badge role-user" style="font-size: 10px; margin-left: 4px;">@${escapeHtml(item.username)}</span>` : ''}</td>
       <td><span class="${badgeClass}">${item.status}</span></td>
       <td>
-        <button class="btn-icon" title="View details" onclick="showToast('Alert ID: ${item.id}', 'info')">
+        <button class="btn-icon" title="View details" onclick="showToast('Alert ID: ${item.id}${item.username ? ' | User: @' + item.username : ''}', 'info')">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
         </button>
       </td>
@@ -2003,11 +2130,179 @@ function formatTimeAMPM(date) {
 }
 
 // ==========================================
-// 14. MODAL: ADD EMERGENCY CONTACT
+// 14. EMERGENCY CONTACTS MANAGEMENT (STEP 3)
 // ==========================================
 
+let userEmergencyContacts = [];
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+async function loadEmergencyContactsFromBackend() {
+  if (!authStorage.isAuthenticated()) return;
+
+  try {
+    const res = await authFetch(`${BACKEND_URL}/api/auth/emergency-contacts`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.contacts)) {
+        userEmergencyContacts = data.contacts;
+        renderEmergencyContacts();
+      }
+    } else if (res.status === 503) {
+      showToast("Database temporarily unavailable. Emergency contacts could not be loaded.", "warning");
+    }
+  } catch (err) {
+    console.warn("Could not load emergency contacts from backend:", err.message);
+  }
+}
+
+function renderEmergencyContacts() {
+  const contactsGrid = document.getElementById("contactsGrid");
+  const countDisplay = document.getElementById("contactCountDisplay");
+  const addBtn = document.getElementById("btnAddContactHeader");
+
+  const count = userEmergencyContacts.length;
+  if (countDisplay) countDisplay.innerText = count;
+
+  if (addBtn) {
+    if (count >= 3) {
+      addBtn.disabled = true;
+      addBtn.style.opacity = "0.6";
+      addBtn.style.cursor = "not-allowed";
+      addBtn.title = "Maximum 3 emergency contacts reached";
+    } else {
+      addBtn.disabled = false;
+      addBtn.style.opacity = "1";
+      addBtn.style.cursor = "pointer";
+      addBtn.title = "Add emergency contact (up to 3)";
+    }
+  }
+
+  if (!contactsGrid) return;
+
+  if (count === 0) {
+    contactsGrid.innerHTML = `
+      <div class="card-generic" style="grid-column: 1 / -1; text-align: center; padding: 40px 20px;">
+        <div style="font-size: 2.5rem; margin-bottom: 12px;">🛡️</div>
+        <h3 style="color: #fff; margin-bottom: 6px;">No Emergency Contacts Configured</h3>
+        <p style="color: var(--text-muted); font-size: 0.9rem; max-width: 440px; margin: 0 auto 20px;">
+          Add up to 3 trusted contacts (e.g. parents, relatives, friends) to be alerted instantly when SOS is triggered.
+        </p>
+        <button class="btn-primary" onclick="showAddContactModal()" style="display: inline-flex; margin: 0 auto;">
+          + Add First Contact
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  contactsGrid.innerHTML = "";
+
+  userEmergencyContacts.forEach((contact, index) => {
+    const card = document.createElement("div");
+    card.className = "card-generic contact-card";
+
+    const relLower = (contact.relationship || "").toLowerCase();
+    let avatarEmoji = "👤";
+    let avatarBg = "bg-blue-soft";
+    if (relLower.includes("mother") || relLower.includes("mom")) {
+      avatarEmoji = "👩";
+      avatarBg = "bg-pink-soft";
+    } else if (relLower.includes("father") || relLower.includes("dad")) {
+      avatarEmoji = "👨";
+      avatarBg = "bg-indigo-soft";
+    } else if (relLower.includes("friend") || relLower.includes("sister") || relLower.includes("brother")) {
+      avatarEmoji = "🧑";
+      avatarBg = "bg-indigo-soft";
+    } else if (relLower.includes("police") || relLower.includes("emergency") || relLower.includes("doctor")) {
+      avatarEmoji = "🚨";
+      avatarBg = "bg-red-soft";
+    }
+
+    const relLabel = contact.relationship ? escapeHtml(contact.relationship) : "Emergency Contact";
+
+    card.innerHTML = `
+      <div class="contact-header">
+        <div class="contact-avatar ${avatarBg}">${avatarEmoji}</div>
+        <div class="contact-meta">
+          <h4 class="contact-name">${escapeHtml(contact.name)}</h4>
+          <span class="contact-rel">${relLabel} • Priority ${index + 1}</span>
+        </div>
+      </div>
+      <div class="contact-body">
+        <div class="contact-info-row">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          <strong style="color: #f1f5f9;">${escapeHtml(contact.phone)}</strong>
+        </div>
+        <div class="contact-info-row">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span>Priority Alert Ready</span>
+        </div>
+      </div>
+      <div class="contact-footer">
+        <span class="badge-status-green">Active Guardian</span>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button class="contact-action-btn" onclick="showEditContactModal(${index})" style="background: none; border: none; padding: 0; cursor: pointer;">
+            ✏️ Edit
+          </button>
+          <button class="contact-action-btn" onclick="removeEmergencyContact(${index})" style="background: none; border: none; padding: 0; cursor: pointer; color: #f87171;">
+            🗑️ Remove
+          </button>
+        </div>
+      </div>
+    `;
+
+    contactsGrid.appendChild(card);
+  });
+}
+
 function showAddContactModal() {
+  if (userEmergencyContacts.length >= 3) {
+    showToast("Maximum of 3 emergency contacts allowed.", "warning");
+    return;
+  }
+
   const modal = document.getElementById("contactModal");
+  const modalTitle = document.getElementById("contactModalTitle");
+  const editIndex = document.getElementById("contactEditIndex");
+  const nameInput = document.getElementById("newContactName");
+  const phoneInput = document.getElementById("newContactPhone");
+  const relInput = document.getElementById("newContactRelationship");
+
+  if (modalTitle) modalTitle.innerText = "Add Emergency Contact";
+  if (editIndex) editIndex.value = "-1";
+  if (nameInput) nameInput.value = "";
+  if (phoneInput) phoneInput.value = "";
+  if (relInput) relInput.value = "";
+
+  if (modal) modal.classList.add("active");
+}
+
+function showEditContactModal(index) {
+  const contact = userEmergencyContacts[index];
+  if (!contact) return;
+
+  const modal = document.getElementById("contactModal");
+  const modalTitle = document.getElementById("contactModalTitle");
+  const editIndex = document.getElementById("contactEditIndex");
+  const nameInput = document.getElementById("newContactName");
+  const phoneInput = document.getElementById("newContactPhone");
+  const relInput = document.getElementById("newContactRelationship");
+
+  if (modalTitle) modalTitle.innerText = "Edit Emergency Contact";
+  if (editIndex) editIndex.value = String(index);
+  if (nameInput) nameInput.value = contact.name || "";
+  if (phoneInput) phoneInput.value = contact.phone || "";
+  if (relInput) relInput.value = contact.relationship || "";
+
   if (modal) modal.classList.add("active");
 }
 
@@ -2016,53 +2311,363 @@ function closeAddContactModal() {
   if (modal) modal.classList.remove("active");
 }
 
-function saveNewContact() {
-  const name = document.getElementById("newContactName").value.trim();
-  const phone = document.getElementById("newContactPhone").value.trim();
-  const email = document.getElementById("newContactEmail").value.trim();
+async function saveEmergencyContact() {
+  const nameInput = document.getElementById("newContactName");
+  const phoneInput = document.getElementById("newContactPhone");
+  const relInput = document.getElementById("newContactRelationship");
+  const editIndexInput = document.getElementById("contactEditIndex");
+  const submitBtn = document.getElementById("btnSaveContactSubmit");
+
+  const name = nameInput ? nameInput.value.trim() : "";
+  const phone = phoneInput ? phoneInput.value.trim() : "";
+  const relationship = relInput ? relInput.value.trim() : "";
+  const editIndex = editIndexInput ? parseInt(editIndexInput.value, 10) : -1;
 
   if (!name || !phone) {
-    alert("Please enter a contact name and phone number.");
+    showToast("Contact name and phone number are required.", "warning");
     return;
   }
 
-  const contactsGrid = document.getElementById("contactsGrid");
-  if (contactsGrid) {
-    const card = document.createElement("div");
-    card.className = "card-generic contact-card";
-    card.innerHTML = `
-      <div class="contact-header">
-        <div class="contact-avatar bg-blue-soft">👤</div>
-        <div class="contact-meta">
-          <h4 class="contact-name">${name}</h4>
-          <span class="contact-rel">Custom Emergency Contact</span>
-        </div>
-      </div>
-      <div class="contact-body">
-        <div class="contact-info-row">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-          <span>${phone}</span>
-        </div>
-        ${email ? `
-        <div class="contact-info-row">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-          <span>${email}</span>
-        </div>` : ''}
-      </div>
-      <div class="contact-footer">
-        <span class="badge-status-green">Ready</span>
-        <span class="contact-action-btn" title="Simulate call">📞 Test Dial</span>
-      </div>
-    `;
-    contactsGrid.appendChild(card);
+  let updatedList = [];
+  if (editIndex >= 0 && editIndex < userEmergencyContacts.length) {
+    updatedList = [...userEmergencyContacts];
+    updatedList[editIndex] = { name, phone, relationship };
+  } else {
+    if (userEmergencyContacts.length >= 3) {
+      showToast("Maximum of 3 emergency contacts allowed.", "warning");
+      return;
+    }
+    updatedList = [...userEmergencyContacts, { name, phone, relationship }];
   }
 
-  document.getElementById("newContactName").value = "";
-  document.getElementById("newContactPhone").value = "";
-  document.getElementById("newContactEmail").value = "";
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerText = "Saving to MongoDB...";
+  }
 
-  closeAddContactModal();
-  showToast(`Contact "${name}" added to emergency directory`, "success");
+  try {
+    const res = await authFetch(`${BACKEND_URL}/api/auth/emergency-contacts`, {
+      method: "PUT",
+      body: JSON.stringify({ contacts: updatedList }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      showToast(data.message || "Failed to save emergency contact.", "danger");
+      return;
+    }
+
+    userEmergencyContacts = Array.isArray(data.contacts) ? data.contacts : updatedList;
+    renderEmergencyContacts();
+    closeAddContactModal();
+    showToast(editIndex >= 0 ? "Emergency contact updated." : "Emergency contact saved to MongoDB.", "success");
+  } catch (err) {
+    showToast("Network error saving contact to backend.", "danger");
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerText = "Save Contact";
+    }
+  }
+}
+
+async function removeEmergencyContact(index) {
+  const contact = userEmergencyContacts[index];
+  if (!contact) return;
+
+  if (!confirm(`Are you sure you want to remove "${contact.name}" from your emergency contacts?`)) {
+    return;
+  }
+
+  const updatedList = userEmergencyContacts.filter((_, i) => i !== index);
+
+  try {
+    const res = await authFetch(`${BACKEND_URL}/api/auth/emergency-contacts`, {
+      method: "PUT",
+      body: JSON.stringify({ contacts: updatedList }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      showToast(data.message || "Failed to remove emergency contact.", "danger");
+      return;
+    }
+
+    userEmergencyContacts = Array.isArray(data.contacts) ? data.contacts : updatedList;
+    renderEmergencyContacts();
+    showToast(`Removed "${contact.name}" from emergency contacts.`, "info");
+  } catch (err) {
+    showToast("Network error updating emergency contacts.", "danger");
+  }
+}
+
+// ==========================================
+// STEP 4B: USER <-> ESP8266 DEVICE CONNECTION
+// ==========================================
+let currentUserDevice = null;
+let isDeviceLoading = false;
+let currentActiveSosUser = null;
+
+async function loadMyDeviceFromBackend() {
+  if (!authStorage.isAuthenticated()) {
+    currentUserDevice = null;
+    renderMyDeviceSection();
+    return;
+  }
+
+  isDeviceLoading = true;
+  renderMyDeviceSection();
+
+  try {
+    const res = await authFetch(`${BACKEND_URL}/api/device/my-device`);
+    if (res.status === 200) {
+      const data = await res.json();
+      if (data.success && data.data) {
+        currentUserDevice = data.data;
+        if (currentUserDevice.deviceId) {
+          hardwareState.deviceId = currentUserDevice.deviceId;
+          if (currentUserDevice.status) hardwareState.deviceStatus = currentUserDevice.status;
+          if (currentUserDevice.safetyStatus) hardwareState.safetyStatus = currentUserDevice.safetyStatus;
+        }
+      } else {
+        currentUserDevice = null;
+      }
+    } else if (res.status === 404) {
+      // Clean 404: No device assigned to this user
+      currentUserDevice = null;
+    } else if (res.status === 401) {
+      currentUserDevice = null;
+    } else {
+      currentUserDevice = null;
+    }
+  } catch (err) {
+    console.warn("Could not load user device from backend:", err.message);
+    currentUserDevice = null;
+  } finally {
+    isDeviceLoading = false;
+    renderMyDeviceSection();
+    updateDashboard();
+  }
+}
+
+function renderMyDeviceSection() {
+  const container = document.getElementById("myDeviceSection");
+  if (!container) return;
+
+  if (isDeviceLoading) {
+    container.innerHTML = `
+      <div class="my-device-loading">
+        <span class="proto-dot status-green"></span>
+        <span>Checking device connection with MongoDB...</span>
+      </div>
+    `;
+    return;
+  }
+
+  if (currentUserDevice) {
+    const devId = currentUserDevice.deviceId || "SAFEHER-001";
+    const status = currentUserDevice.status || "ONLINE";
+    const safety = currentUserDevice.safetyStatus || "SAFE";
+    const ownerName = currentUserDevice.owner?.username || authStorage.getUser()?.username || "You";
+    const isOnline = status === "ONLINE";
+
+    container.innerHTML = `
+      <div class="my-device-header">
+        <div class="my-device-header-left">
+          <div class="card-icon-tag bg-cyan-soft">
+            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+          </div>
+          <div>
+            <h3 class="my-device-title">My Safety Device</h3>
+            <span class="my-device-subtitle">${escapeHtml(currentUserDevice.deviceName || "SafeHer Wearable Band")}</span>
+          </div>
+        </div>
+        <div class="my-device-header-right">
+          <span class="badge-status-green" id="deviceConnectedBadge">
+            <span class="pulse-dot" style="display: inline-block; width: 6px; height: 6px; background: var(--safe-green); border-radius: 50%; margin-right: 6px;"></span>
+            Connected
+          </span>
+        </div>
+      </div>
+
+      <div class="my-device-body">
+        <div class="my-device-info-grid">
+          <div class="my-device-info-item">
+            <span class="my-device-info-label">Device ID</span>
+            <span class="my-device-info-val text-white font-mono" id="myDeviceIdDisplay">${escapeHtml(devId)}</span>
+          </div>
+          <div class="my-device-info-item">
+            <span class="my-device-info-label">Connection Status</span>
+            <div class="my-device-status-val">
+              <span class="status-indicator ${isOnline ? 'status-green' : 'status-gray'}"></span>
+              <span class="${isOnline ? 'text-green' : 'text-muted'} font-bold">${escapeHtml(status)}</span>
+            </div>
+          </div>
+          <div class="my-device-info-item">
+            <span class="my-device-info-label">Safety Status</span>
+            <div class="my-device-status-val">
+              <span class="status-indicator ${safety === 'EMERGENCY' ? 'status-red' : 'status-green'}"></span>
+              <span class="${safety === 'EMERGENCY' ? 'text-red' : 'text-green'} font-bold">${escapeHtml(safety)}</span>
+            </div>
+          </div>
+          <div class="my-device-info-item">
+            <span class="my-device-info-label">Linked Account</span>
+            <span class="my-device-info-val text-accent">@${escapeHtml(ownerName)}</span>
+          </div>
+        </div>
+      </div>
+    `;
+  } else {
+    container.innerHTML = `
+      <div class="my-device-header">
+        <div class="my-device-header-left">
+          <div class="card-icon-tag bg-yellow-soft">
+            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+          </div>
+          <div>
+            <h3 class="my-device-title">My Safety Device</h3>
+            <span class="my-device-subtitle">Pair your ESP8266 Wearable Prototype</span>
+          </div>
+        </div>
+        <div class="my-device-header-right">
+          <span class="badge-status-gray" id="deviceNotConnectedBadge" style="background: rgba(239, 71, 111, 0.12); color: #f87171; border: 1px solid rgba(239, 71, 111, 0.25);">
+            No device connected
+          </span>
+        </div>
+      </div>
+
+      <div class="my-device-body">
+        <p class="my-device-prompt">
+          No device connected to your account. Enter your wearable hardware ID to link your SafeHer device.
+        </p>
+        
+        <div class="my-device-form-row">
+          <div class="my-device-input-wrap">
+            <label for="claimDeviceIdInput" class="my-device-input-label">Device ID</label>
+            <input
+              type="text"
+              id="claimDeviceIdInput"
+              class="form-input my-device-input"
+              value="SAFEHER-001"
+              placeholder="e.g. SAFEHER-001"
+              autocomplete="off"
+            />
+          </div>
+          <button class="btn-primary btn-claim-device" id="btnClaimDevice" onclick="handleClaimDevice()">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            </svg>
+            <span>Connect Device</span>
+          </button>
+        </div>
+
+        <div id="claimDeviceError" class="claim-device-error" style="display: none;"></div>
+      </div>
+    `;
+  }
+}
+
+async function handleClaimDevice() {
+  if (!authStorage.isAuthenticated()) {
+    showToast("Please log in again.", "danger");
+    navigateToRoute("/login");
+    return;
+  }
+
+  const inputEl = document.getElementById("claimDeviceIdInput");
+  const errorEl = document.getElementById("claimDeviceError");
+  const btnEl = document.getElementById("btnClaimDevice");
+
+  if (errorEl) {
+    errorEl.style.display = "none";
+    errorEl.innerText = "";
+  }
+
+  const deviceId = inputEl ? inputEl.value.trim() : "";
+  if (!deviceId) {
+    if (errorEl) {
+      errorEl.innerText = "Please enter a valid Device ID.";
+      errorEl.style.display = "block";
+    }
+    showToast("Device ID is required.", "warning");
+    return;
+  }
+
+  if (btnEl) {
+    btnEl.disabled = true;
+    btnEl.innerHTML = `<span>Connecting...</span>`;
+  }
+
+  try {
+    const res = await authFetch(`${BACKEND_URL}/api/device/claim`, {
+      method: "POST",
+      body: JSON.stringify({ deviceId }),
+    });
+
+    const data = await res.json();
+
+    if (res.status === 200 && data.success) {
+      showToast(data.message || `Device '${deviceId}' successfully connected!`, "success");
+      currentUserDevice = data.data;
+      if (data.data.deviceId) hardwareState.deviceId = data.data.deviceId;
+      if (data.data.status) hardwareState.deviceStatus = data.data.status;
+      if (data.data.safetyStatus) hardwareState.safetyStatus = data.data.safetyStatus;
+
+      renderMyDeviceSection();
+      updateDashboard();
+    } else if (res.status === 401) {
+      const msg = "Please log in again.";
+      showToast(msg, "danger");
+      if (errorEl) {
+        errorEl.innerText = msg;
+        errorEl.style.display = "block";
+      }
+      authStorage.clear();
+      navigateToRoute("/login");
+    } else if (res.status === 404) {
+      const msg = "Device not found.";
+      showToast(msg, "danger");
+      if (errorEl) {
+        errorEl.innerText = msg;
+        errorEl.style.display = "block";
+      }
+    } else if (res.status === 409) {
+      const msg = "This device is already connected to another account.";
+      showToast(msg, "danger");
+      if (errorEl) {
+        errorEl.innerText = msg;
+        errorEl.style.display = "block";
+      }
+    } else {
+      const msg = data.message || "Failed to connect device. Please verify ID and try again.";
+      showToast(msg, "danger");
+      if (errorEl) {
+        errorEl.innerText = msg;
+        errorEl.style.display = "block";
+      }
+    }
+  } catch (err) {
+    const msg = "Network/server error connecting to SafeHer backend. Ensure backend is running.";
+    showToast(msg, "danger");
+    if (errorEl) {
+      errorEl.innerText = msg;
+      errorEl.style.display = "block";
+    }
+  } finally {
+    if (btnEl && !currentUserDevice) {
+      btnEl.disabled = false;
+      btnEl.innerHTML = `
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+        </svg>
+        <span>Connect Device</span>
+      `;
+    }
+  }
 }
 
 // Global window attachments for inline HTML onclick handlers
@@ -2072,8 +2677,14 @@ window.simulateSensorsOnce = simulateSensorsOnce;
 window.exportAlerts = exportAlerts;
 window.clearHistoryConfirmation = clearHistoryConfirmation;
 window.showAddContactModal = showAddContactModal;
+window.showEditContactModal = showEditContactModal;
 window.closeAddContactModal = closeAddContactModal;
-window.saveNewContact = saveNewContact;
+window.saveEmergencyContact = saveEmergencyContact;
+window.removeEmergencyContact = removeEmergencyContact;
+window.loadEmergencyContactsFromBackend = loadEmergencyContactsFromBackend;
+window.loadMyDeviceFromBackend = loadMyDeviceFromBackend;
+window.renderMyDeviceSection = renderMyDeviceSection;
+window.handleClaimDevice = handleClaimDevice;
 window.updateSimInterval = updateSimInterval;
 window.toggleDeviceOnline = toggleDeviceOnline;
 window.showToast = showToast;
@@ -2081,6 +2692,8 @@ window.navigateToRoute = navigateToRoute;
 window.startEmergencyGPS = startEmergencyGPS;
 window.stopEmergencyGPS = stopEmergencyGPS;
 window.switchAuthTab = switchAuthTab;
+window.selectLoginRole = selectLoginRole;
+window.selectRegisterRole = selectRegisterRole;
 window.handleLoginSubmit = handleLoginSubmit;
 window.handleRegisterSubmit = handleRegisterSubmit;
 window.handleLogout = handleLogout;

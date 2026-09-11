@@ -1,5 +1,8 @@
 import Alert from '../models/Alert.js';
 import Device from '../models/Device.js';
+import User from '../models/User.js';
+import SensorData from '../models/SensorData.js';
+import EmergencyLocation from '../models/EmergencyLocation.js';
 import { isDbConnected } from '../config/db.js';
 
 // Fallback in-memory alerts
@@ -53,8 +56,26 @@ export const triggerSos = async (req, res, next) => {
       triggeredBy = 'Physical SOS Switch / Test Button',
     } = req.body;
 
+    // Identify device and associated owner from MongoDB (do NOT trust client-sent userId)
+    let associatedUser = null;
+    let deviceOwnerId = null;
+    let deviceOwnerUsername = null;
+
+    if (isDbConnected()) {
+      const existingDevice = await Device.findOne({ deviceId });
+      if (existingDevice && existingDevice.userId) {
+        associatedUser = await User.findById(existingDevice.userId);
+        if (associatedUser) {
+          deviceOwnerId = associatedUser._id;
+          deviceOwnerUsername = associatedUser.username;
+        }
+      }
+    }
+
     const alertData = {
       deviceId,
+      userId: deviceOwnerId,
+      username: deviceOwnerUsername,
       type,
       severity,
       message,
@@ -100,13 +121,38 @@ export const triggerSos = async (req, res, next) => {
       };
     }
 
+    // Fetch latest sensor telemetry if available
+    let latestSensor = null;
+    if (isDbConnected()) {
+      try {
+        latestSensor = await SensorData.findOne({ deviceId }).sort({ timestamp: -1 });
+      } catch (err) {}
+    }
+
+    // Fetch latest emergency location if available
+    let latestLocation = null;
+    if (isDbConnected()) {
+      try {
+        latestLocation = await EmergencyLocation.findOne({ deviceId }).sort({ timestamp: -1 });
+      } catch (err) {}
+    }
+
+    // Comprehensive SOS payload for Admin & connected dashboards
+    const sosPayload = {
+      alert: savedAlert,
+      device: updatedDevice,
+      deviceId,
+      userId: deviceOwnerId ? deviceOwnerId.toString() : null,
+      username: deviceOwnerUsername || null,
+      timestamp: savedAlert.timestamp || new Date(),
+      sensor: latestSensor || null,
+      location: latestLocation || null,
+    };
+
     // 3. Broadcast SOS alert and updated device status over Socket.IO
     const io = req.app.get('io');
     if (io) {
-      io.emit('sosAlert', {
-        alert: savedAlert,
-        device: updatedDevice,
-      });
+      io.emit('sosAlert', sosPayload);
       io.emit('deviceStatus', updatedDevice);
     }
 
@@ -116,6 +162,14 @@ export const triggerSos = async (req, res, next) => {
       data: {
         alert: savedAlert,
         device: updatedDevice,
+        user: associatedUser
+          ? {
+              id: associatedUser._id.toString(),
+              name: associatedUser.name,
+              username: associatedUser.username,
+              role: associatedUser.role,
+            }
+          : null,
       },
     });
   } catch (error) {
