@@ -106,7 +106,7 @@ button, input, select {
 
 /* ---------------- Sidebar ---------------- */
 .sidebar {
-  width: 270px;
+  width: 250px;
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border-subtle);
   display: flex;
@@ -325,12 +325,12 @@ button, input, select {
 
 /* ---------------- Main Content Layout ---------------- */
 .main-content {
-  margin-left: 270px;
+  margin-left: 250px;
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  width: calc(100vw - 270px);
+  width: calc(100vw - 250px);
   background: radial-gradient(circle at 80% 10%, rgba(59, 130, 246, 0.05) 0%, transparent 60%);
 }
 
@@ -417,12 +417,21 @@ button, input, select {
 /* ---------------- Emergency Banner ---------------- */
 .emergency-banner {
   display: none;
-  background: linear-gradient(90deg, #991b1b 0%, #ef476f 100%);
+  background: rgba(239, 71, 111, 0.12);
+  border-top: 1px solid var(--danger-red);
+  border-bottom: 1px solid var(--danger-red);
+  border-left: 5px solid var(--danger-red);
   color: #ffffff;
   padding: 14px 32px;
-  border-bottom: 2px solid #ff3366;
-  animation: slideDown 0.3s ease-out;
-  box-shadow: 0 4px 20px rgba(239, 71, 111, 0.4);
+  animation: slideDown 0.3s ease-out, banner-glow-pulse 2.5s infinite ease-in-out;
+  box-shadow: 0 4px 20px rgba(239, 71, 111, 0.25);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+@keyframes banner-glow-pulse {
+  0%, 100% { box-shadow: 0 4px 20px rgba(239, 71, 111, 0.25); }
+  50% { box-shadow: 0 4px 32px rgba(239, 71, 111, 0.45); }
 }
 
 .emergency-banner.active {
@@ -441,19 +450,20 @@ button, input, select {
 .banner-icon-wrapper {
   width: 40px;
   height: 40px;
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--danger-red-soft);
+  border: 1px solid var(--danger-red);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  animation: ring-scale 1s infinite alternate;
+  animation: ring-scale 1.5s infinite alternate ease-in-out;
 }
 
 .banner-alert-icon {
-  width: 24px;
-  height: 24px;
-  stroke: #ffffff;
+  width: 22px;
+  height: 22px;
+  stroke: var(--danger-red);
 }
 
 .banner-text {
@@ -465,17 +475,18 @@ button, input, select {
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  color: #ffffff;
 }
 
 .banner-text p {
   font-size: 0.84rem;
-  opacity: 0.92;
+  color: var(--text-secondary);
 }
 
 .btn-banner-reset {
-  background: #ffffff;
-  color: #991b1b;
-  border: none;
+  background: var(--danger-red);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
   padding: 8px 18px;
   border-radius: var(--radius-md);
   font-size: 0.85rem;
@@ -484,13 +495,15 @@ button, input, select {
   display: flex;
   align-items: center;
   gap: 8px;
-  transition: transform var(--transition-fast), background var(--transition-fast);
+  transition: all var(--transition-fast);
   white-space: nowrap;
+  box-shadow: 0 2px 10px rgba(239, 71, 111, 0.35);
 }
 
 .btn-banner-reset:hover {
-  background: #f1f5f9;
-  transform: scale(1.03);
+  background: #ff5c82;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(239, 71, 111, 0.55);
 }
 
 /* ---------------- Content Wrapper & Panes ---------------- */
@@ -599,10 +612,10 @@ button, input, select {
   background: rgba(255, 255, 255, 0.05);
 }
 
-/* ---------------- 8 Status Cards Grid ---------------- */
+/* ---------------- 9 Status Cards Grid ---------------- */
 .cards-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 18px;
   margin-bottom: 28px;
 }
@@ -2163,6 +2176,7 @@ input:checked + .slider:before {
 }
 
 .admin-metric-value {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 20px;
   font-weight: 800;
   color: var(--text-main);
