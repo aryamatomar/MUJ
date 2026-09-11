@@ -1,5 +1,11 @@
 import express from 'express';
-import { register, login, getMe } from '../controllers/authController.js';
+import {
+  register,
+  login,
+  getMe,
+  getEmergencyContacts,
+  updateEmergencyContacts,
+} from '../controllers/authController.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -24,5 +30,19 @@ router.post('/login', login);
  * @access  Private (Bearer Token required)
  */
 router.get('/me', authenticateToken, getMe);
+
+/**
+ * @route   GET /api/auth/emergency-contacts
+ * @desc    Get current user's emergency contacts from MongoDB
+ * @access  Private (Bearer Token required)
+ */
+router.get('/emergency-contacts', authenticateToken, getEmergencyContacts);
+
+/**
+ * @route   PUT /api/auth/emergency-contacts
+ * @desc    Update current user's emergency contacts in MongoDB
+ * @access  Private (Bearer Token required)
+ */
+router.put('/emergency-contacts', authenticateToken, updateEmergencyContacts);
 
 export default router;

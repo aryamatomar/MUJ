@@ -2349,6 +2349,53 @@ input:checked + .slider:before {
    AUTHENTICATION & USER PROFILE STYLES (STEP 2)
    ========================================================================== */
 
+/* Standalone Auth Layout Mode (Clean, centered /login layout with zero dashboard chrome) */
+body.layout-auth {
+  overflow: auto;
+  background-color: var(--bg-app);
+}
+
+body.layout-auth .sidebar,
+body.layout-auth .app-header,
+body.layout-auth .emergency-banner {
+  display: none !important;
+}
+
+body.layout-auth .app-layout {
+  display: flex !important;
+  min-height: 100vh !important;
+  width: 100vw !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+body.layout-auth .main-content {
+  margin-left: 0 !important;
+  width: 100vw !important;
+  min-height: 100vh !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: radial-gradient(circle at 50% 30%, rgba(59, 130, 246, 0.09) 0%, rgba(9, 13, 22, 1) 75%) !important;
+  padding: 24px !important;
+}
+
+body.layout-auth .auth-view {
+  display: flex !important;
+  min-height: auto !important;
+  width: 100% !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+}
+
+body.layout-auth .auth-card {
+  margin: auto;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7), 0 0 55px rgba(59, 130, 246, 0.18);
+}
+
 .auth-view {
   display: none;
   min-height: calc(100vh - 120px);
@@ -2498,6 +2545,62 @@ input:checked + .slider:before {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+/* Role Selector Segmented Switch */
+.role-selector-group {
+  margin-bottom: 2px !important;
+}
+
+.role-segmented-switch {
+  display: flex;
+  background: var(--bg-card-inner);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 4px;
+  gap: 6px;
+}
+
+.role-switch-btn {
+  flex: 1;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all var(--transition-fast);
+}
+
+.role-switch-btn:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.role-switch-btn.active#roleBtnUser,
+.role-switch-btn.active#regRoleBtnUser {
+  background: rgba(6, 214, 160, 0.15);
+  color: #06d6a0;
+  border-color: rgba(6, 214, 160, 0.4);
+  box-shadow: 0 0 14px rgba(6, 214, 160, 0.25);
+}
+
+.role-switch-btn.active#roleBtnAdmin,
+.role-switch-btn.active#regRoleBtnAdmin {
+  background: rgba(239, 71, 111, 0.15);
+  color: #ef476f;
+  border-color: rgba(239, 71, 111, 0.4);
+  box-shadow: 0 0 14px rgba(239, 71, 111, 0.3);
+}
+
+.role-icon {
+  font-size: 15px;
 }
 
 .auth-form .form-group {
@@ -2682,6 +2785,175 @@ input:checked + .slider:before {
 .btn-header-auth:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.45);
+}
+
+/* ==========================================================================
+   STEP 4B: MY SAFETY DEVICE / DEVICE CONNECTION STYLES
+   ========================================================================== */
+.my-device-section {
+  background: linear-gradient(135deg, #131c33 0%, #161f38 100%);
+  border: 1px solid #23355a;
+  border-radius: var(--radius-lg);
+  padding: 18px 24px;
+  margin-bottom: 22px;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-fast);
+}
+
+.my-device-section:hover {
+  border-color: #2e4370;
+}
+
+.my-device-loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  padding: 8px 0;
+}
+
+.my-device-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.my-device-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.my-device-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.my-device-subtitle {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  display: block;
+}
+
+.my-device-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.my-device-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.my-device-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  background: rgba(15, 23, 42, 0.5);
+  padding: 14px 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.my-device-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.my-device-info-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+.my-device-info-val {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.my-device-status-val {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+}
+
+.my-device-prompt {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  margin: 0 0 14px;
+  line-height: 1.5;
+}
+
+.my-device-form-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.my-device-input-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 220px;
+  max-width: 360px;
+}
+
+.my-device-input-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.my-device-input {
+  background: #0f172a !important;
+  border: 1px solid var(--border-subtle) !important;
+  color: #f1f5f9 !important;
+  font-family: monospace;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  font-size: 0.95rem;
+  height: 42px;
+}
+
+.my-device-input:focus {
+  border-color: var(--info-cyan) !important;
+  box-shadow: 0 0 0 3px rgba(6, 214, 160, 0.15) !important;
+}
+
+.btn-claim-device {
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  padding: 0 20px;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.claim-device-error {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(239, 71, 111, 0.12);
+  border-left: 3px solid var(--danger-red);
+  border-radius: var(--radius-sm);
+  color: #fca5a5;
+  font-size: 0.84rem;
+  font-weight: 500;
 }
 
 

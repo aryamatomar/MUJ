@@ -26,6 +26,12 @@ const emergencyLocationSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
+    },
     timestamp: {
       type: Date,
       default: Date.now,

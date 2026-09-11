@@ -20,6 +20,20 @@
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 </head>
 <body>
+  <!-- Standalone vs Dashboard Layout Initializer (Prevents UI flicker) -->
+  <script>
+    (function () {
+      var p = window.location.pathname.toLowerCase();
+      var h = window.location.hash.toLowerCase();
+      var t = localStorage.getItem("safeher_token");
+      if (p.includes("/login") || p.includes("/auth") || h === "#login" || h === "#auth" || !t) {
+        document.body.classList.add("layout-auth");
+      } else {
+        document.body.classList.add("layout-dashboard");
+      }
+    })();
+  </script>
+
   <!-- App Container -->
   <div class="app-layout">
     
@@ -244,6 +258,21 @@
 
           <!-- Form 1: Login -->
           <form class="auth-form active" id="formLogin" onsubmit="handleLoginSubmit(event)">
+            <!-- Role Selector Segmented Switch (User vs Admin) -->
+            <div class="form-group role-selector-group">
+              <label class="form-label">Select Account Role</label>
+              <div class="role-segmented-switch">
+                <button type="button" class="role-switch-btn active" id="roleBtnUser" onclick="selectLoginRole('user')">
+                  <span class="role-icon">👩</span>
+                  <span>User</span>
+                </button>
+                <button type="button" class="role-switch-btn" id="roleBtnAdmin" onclick="selectLoginRole('admin')">
+                  <span class="role-icon">🛡️</span>
+                  <span>Admin</span>
+                </button>
+              </div>
+            </div>
+
             <div class="form-group">
               <label class="form-label" for="loginUsername">Username</label>
               <input type="text" class="form-input" id="loginUsername" placeholder="Enter your username" required autocomplete="username" />
@@ -254,15 +283,38 @@
             </div>
             <button type="submit" class="btn-auth-submit" id="btnLoginSubmit">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
-              <span>Login to SafeHer</span>
+              <span id="loginSubmitBtnText">Login as User</span>
             </button>
-            <p class="auth-switch-note">
-              Don't have an account? <button type="button" class="auth-switch-link" onclick="switchAuthTab('register')">Create Account</button>
-            </p>
           </form>
 
           <!-- Form 2: Register -->
           <form class="auth-form" id="formRegister" onsubmit="handleRegisterSubmit(event)">
+            <!-- Role Selector Segmented Switch (User vs Admin) -->
+            <div class="form-group role-selector-group">
+              <label class="form-label">Select Account Role</label>
+              <div class="role-segmented-switch">
+                <button type="button" class="role-switch-btn active" id="regRoleBtnUser" onclick="selectRegisterRole('user')">
+                  <span class="role-icon">👩</span>
+                  <span>User</span>
+                </button>
+                <button type="button" class="role-switch-btn" id="regRoleBtnAdmin" onclick="selectRegisterRole('admin')">
+                  <span class="role-icon">🛡️</span>
+                  <span>Admin</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Admin Secret Key / Invite Code (Visible only when Admin role is selected) -->
+            <div class="form-group" id="regAdminSecretGroup" style="display: none;">
+              <label class="form-label" for="registerAdminSecret">
+                Admin Secret Key / Invite Code <span style="color: #ef4444;">*</span>
+              </label>
+              <input type="password" class="form-input" id="registerAdminSecret" placeholder="Enter Admin verification passcode" autocomplete="off" />
+              <span class="text-muted-sm" style="display: block; font-size: 11px; margin-top: 4px; color: #94a3b8;">
+                Required to authorize Administrator-level emergency command access.
+              </span>
+            </div>
+
             <div class="form-group">
               <label class="form-label" for="registerName">Full Name</label>
               <input type="text" class="form-input" id="registerName" placeholder="e.g. Aryama Singh" required autocomplete="name" />
@@ -285,11 +337,8 @@
             </div>
             <button type="submit" class="btn-auth-submit" id="btnRegisterSubmit">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
-              <span>Create Account</span>
+              <span id="registerSubmitBtnText">Create User Account</span>
             </button>
-            <p class="auth-switch-note">
-              Already have an account? <button type="button" class="auth-switch-link" onclick="switchAuthTab('login')">Sign In</button>
-            </p>
           </form>
         </div>
       </div>
@@ -317,6 +366,14 @@
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
                 Sync Sensors
               </button>
+            </div>
+          </div>
+
+          <!-- My Safety Device / Device Connection Section (Step 4B) -->
+          <div class="my-device-section" id="myDeviceSection">
+            <div class="my-device-loading">
+              <span class="proto-dot status-green"></span>
+              <span>Checking device connection with MongoDB...</span>
             </div>
           </div>
 
@@ -968,92 +1025,19 @@
           <div class="section-header-row">
             <div>
               <h2 class="section-title">Emergency Contacts Directory</h2>
-              <p class="section-desc">Designated guardians and emergency services configured for instant dispatch</p>
+              <p class="section-desc">Designated guardians configured in your account (Maximum 3 contacts)</p>
             </div>
-            <button class="btn-primary" onclick="showAddContactModal()">
+            <button class="btn-primary" id="btnAddContactHeader" onclick="showAddContactModal()">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Add Contact
+              <span>Add Contact</span> (<span id="contactCountDisplay">0</span>/3)
             </button>
           </div>
 
-          <!-- Contacts Cards Grid -->
+          <!-- Contacts Cards Grid (Dynamically rendered from MongoDB) -->
           <div class="contacts-grid" id="contactsGrid">
-            
-            <!-- Contact 1: Mother -->
-            <div class="card-generic contact-card">
-              <div class="contact-header">
-                <div class="contact-avatar bg-pink-soft">👩</div>
-                <div class="contact-meta">
-                  <h4 class="contact-name">Mother</h4>
-                  <span class="contact-rel">Primary Guardian • Priority 1</span>
-                </div>
-              </div>
-              <div class="contact-body">
-                <div class="contact-info-row">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-                  <span>+91 98765 43210</span>
-                </div>
-                <div class="contact-info-row">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-                  <span>mother@safeher-mock.com</span>
-                </div>
-              </div>
-              <div class="contact-footer">
-                <span class="badge-status-green">SMS & Call Active</span>
-                <span class="contact-action-btn" title="Simulate call">📞 Test Dial</span>
-              </div>
+            <div class="card-generic" style="grid-column: 1 / -1; text-align: center; padding: 32px 16px;">
+              <span class="text-muted">Loading emergency contacts from database...</span>
             </div>
-
-            <!-- Contact 2: Friend -->
-            <div class="card-generic contact-card">
-              <div class="contact-header">
-                <div class="contact-avatar bg-indigo-soft">🧑</div>
-                <div class="contact-meta">
-                  <h4 class="contact-name">Friend (Sneha)</h4>
-                  <span class="contact-rel">Secondary Contact • Priority 2</span>
-                </div>
-              </div>
-              <div class="contact-body">
-                <div class="contact-info-row">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-                  <span>+91 91234 56789</span>
-                </div>
-                <div class="contact-info-row">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-                  <span>sneha.friend@safeher-mock.com</span>
-                </div>
-              </div>
-              <div class="contact-footer">
-                <span class="badge-status-green">SMS Active</span>
-                <span class="contact-action-btn" title="Simulate call">📞 Test Dial</span>
-              </div>
-            </div>
-
-            <!-- Contact 3: Emergency Services -->
-            <div class="card-generic contact-card service-highlight">
-              <div class="contact-header">
-                <div class="contact-avatar bg-red-soft">🚨</div>
-                <div class="contact-meta">
-                  <h4 class="contact-name">Emergency Services (ERSS)</h4>
-                  <span class="contact-rel">National Emergency Response (Police / Ambulance)</span>
-                </div>
-              </div>
-              <div class="contact-body">
-                <div class="contact-info-row">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                  <strong class="text-white">Emergency Hotline: 112 / 1091</strong>
-                </div>
-                <div class="contact-info-row">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                  <span>Auto GPS Geolocation Dispatch</span>
-                </div>
-              </div>
-              <div class="contact-footer">
-                <span class="badge-sos-nav">Instant Priority</span>
-                <span class="contact-action-btn" title="Simulate call">🚨 Official Dispatch</span>
-              </div>
-            </div>
-
           </div>
 
         </section>
@@ -1307,30 +1291,31 @@
   <!-- Toast Notification Container -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <!-- Simple Modal for Add Contact UI -->
+  <!-- Modal for Add / Edit Emergency Contact -->
   <div class="modal-overlay" id="contactModal">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 class="modal-title">Add Emergency Contact</h3>
+        <h3 class="modal-title" id="contactModalTitle">Add Emergency Contact</h3>
         <button class="btn-icon" onclick="closeAddContactModal()">&times;</button>
       </div>
       <div class="modal-body">
+        <input type="hidden" id="contactEditIndex" value="-1">
         <div class="form-group">
-          <label class="form-label">Contact Name / Relationship</label>
-          <input type="text" class="form-input" id="newContactName" placeholder="e.g. Sister, Father, Neighbor">
+          <label class="form-label">Contact Name <span style="color: #ef4444;">*</span></label>
+          <input type="text" class="form-input" id="newContactName" placeholder="e.g. Mom, Sneha, Dr. Sharma" required>
         </div>
         <div class="form-group">
-          <label class="form-label">Phone Number</label>
-          <input type="text" class="form-input" id="newContactPhone" placeholder="+91 XXXXX XXXXX">
+          <label class="form-label">Phone Number <span style="color: #ef4444;">*</span></label>
+          <input type="tel" class="form-input" id="newContactPhone" placeholder="+91 98765 43210" required>
         </div>
         <div class="form-group">
-          <label class="form-label">Email Address (Optional)</label>
-          <input type="email" class="form-input" id="newContactEmail" placeholder="contact@example.com">
+          <label class="form-label">Relationship <span class="text-muted" style="font-size: 0.8rem;">(Optional)</span></label>
+          <input type="text" class="form-input" id="newContactRelationship" placeholder="e.g. Mother, Sister, Friend, Guardian">
         </div>
       </div>
       <div class="modal-footer">
         <button class="btn-secondary" onclick="closeAddContactModal()">Cancel</button>
-        <button class="btn-primary" onclick="saveNewContact()">Save Contact</button>
+        <button class="btn-primary" id="btnSaveContactSubmit" onclick="saveEmergencyContact()">Save Contact</button>
       </div>
     </div>
   </div>
