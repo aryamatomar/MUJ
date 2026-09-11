@@ -489,6 +489,9 @@ document.addEventListener("DOMContentLoaded", () => {
   // Setup tab navigation
   initNavigation();
 
+  // Sync initial role navigation visibility
+  updateRoleNavVisibility();
+
   // Setup real-time system clock
   startSystemClock();
 
@@ -1405,8 +1408,54 @@ function switchView(route) {
     }
   }
 
+  // Update role-based navigation item visibility (Admin vs User)
+  updateRoleNavVisibility();
+
   if (headerAdminBadge) {
     headerAdminBadge.innerText = hardwareState.safetyStatus === "EMERGENCY" ? "EMERGENCY" : "MONITOR";
+  }
+}
+
+// ==========================================
+// 7.1 ROLE-BASED NAVIGATION ACCESS CONTROL
+// ==========================================
+
+function updateRoleNavVisibility() {
+  const navItemHistory = document.getElementById("navItemHistory");
+  const navItemContacts = document.getElementById("navItemContacts");
+  const tabHistory = document.getElementById("history");
+  const tabContacts = document.getElementById("contacts");
+  const tabDashboard = document.getElementById("dashboard");
+  const navItemDashboard = document.getElementById("navItemDashboard");
+
+  if (currentRoute === "/admin") {
+    // Admin Command View:
+    // - Show Alert History (restricted to Admin view)
+    // - Hide Emergency Contacts (restricted to User view)
+    if (navItemHistory) navItemHistory.style.display = "flex";
+    if (navItemContacts) navItemContacts.style.display = "none";
+
+    // If currently on contacts tab, redirect to dashboard
+    if (tabContacts && tabContacts.classList.contains("active")) {
+      tabContacts.classList.remove("active");
+      if (tabDashboard) tabDashboard.classList.add("active");
+      document.querySelectorAll(".nav-menu .nav-item").forEach(n => n.classList.remove("active"));
+      if (navItemDashboard) navItemDashboard.classList.add("active");
+    }
+  } else {
+    // Standard User View (/user):
+    // - Hide Alert History (restricted to Admin view only)
+    // - Show Emergency Contacts (restricted to User view only)
+    if (navItemHistory) navItemHistory.style.display = "none";
+    if (navItemContacts) navItemContacts.style.display = "flex";
+
+    // If currently on history tab, redirect to dashboard
+    if (tabHistory && tabHistory.classList.contains("active")) {
+      tabHistory.classList.remove("active");
+      if (tabDashboard) tabDashboard.classList.add("active");
+      document.querySelectorAll(".nav-menu .nav-item").forEach(n => n.classList.remove("active"));
+      if (navItemDashboard) navItemDashboard.classList.add("active");
+    }
   }
 }
 
@@ -1986,23 +2035,69 @@ function clearHistoryConfirmation() {
 }
 
 // ==========================================
-// 11. NAVIGATION & TABS
+// 11. NAVIGATION & TABS (COLLAPSIBLE DRAWER)
 // ==========================================
 
 function initNavigation() {
   const navItems = document.querySelectorAll(".nav-item");
   const tabPanes = document.querySelectorAll(".tab-pane");
   const sidebar = document.getElementById("sidebar");
+  const sidebarOverlay = document.getElementById("sidebarOverlay");
   const mobileMenuBtn = document.getElementById("mobileMenuBtn");
   const sidebarCloseBtn = document.getElementById("sidebarCloseBtn");
+
+  function openSidebarDrawer() {
+    if (sidebar) sidebar.classList.add("open");
+    if (sidebarOverlay) sidebarOverlay.classList.add("active");
+  }
+
+  function closeSidebarDrawer() {
+    if (sidebar) sidebar.classList.remove("open");
+    if (sidebarOverlay) sidebarOverlay.classList.remove("active");
+  }
+
+  function toggleSidebarDrawer() {
+    if (sidebar && sidebar.classList.contains("open")) {
+      closeSidebarDrawer();
+    } else {
+      openSidebarDrawer();
+    }
+  }
+
+  if (mobileMenuBtn) {
+    mobileMenuBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleSidebarDrawer();
+    });
+  }
+
+  if (sidebarCloseBtn) {
+    sidebarCloseBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeSidebarDrawer();
+    });
+  }
+
+  if (sidebarOverlay) {
+    sidebarOverlay.addEventListener("click", () => {
+      closeSidebarDrawer();
+    });
+  }
+
+  // Close drawer on ESC key
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      closeSidebarDrawer();
+    }
+  });
 
   navItems.forEach((item) => {
     item.addEventListener("click", (e) => {
       e.preventDefault();
       const targetTab = item.getAttribute("data-tab");
 
-      // Make sure we are on the user dashboard view when clicking sidebar tabs
-      if (currentRoute !== "/user") {
+      // If user clicks a tab in user mode, ensure we are on user dashboard view
+      if (currentRoute === "/admin" && targetTab !== "history") {
         navigateToRoute("/user");
       }
 
@@ -2017,16 +2112,9 @@ function initNavigation() {
         }
       });
 
-      if (sidebar) sidebar.classList.remove("open");
+      closeSidebarDrawer();
     });
   });
-
-  if (mobileMenuBtn && sidebar) {
-    mobileMenuBtn.addEventListener("click", () => sidebar.classList.add("open"));
-  }
-  if (sidebarCloseBtn && sidebar) {
-    sidebarCloseBtn.addEventListener("click", () => sidebar.classList.remove("open"));
-  }
 }
 
 // ==========================================
