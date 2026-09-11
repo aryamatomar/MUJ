@@ -10,6 +10,7 @@ import sensorRoutes from './routes/sensorRoutes.js';
 import alertRoutes from './routes/alertRoutes.js';
 import demoRoutes from './routes/demoRoutes.js';
 import locationRoutes from './routes/locationRoutes.js';
+import incidentRoutes from './routes/incidentRoutes.js';
 import { notFoundHandler, errorHandler } from './middleware/errorHandler.js';
 import Device from './models/Device.js';
 
@@ -68,6 +69,7 @@ app.use('/api/sensor', sensorRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/demo', demoRoutes);
 app.use('/api/location', locationRoutes);
+app.use('/api/incidents', incidentRoutes);
 
 // 404 and Global Error Handlers
 app.use(notFoundHandler);

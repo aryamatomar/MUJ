@@ -16,6 +16,9 @@
     "socket.io": "^4.7.5"
   },
   "devDependencies": {
+    "@nomicfoundation/hardhat-ethers": "^4.0.15",
+    "ethers": "^6.17.0",
+    "hardhat": "^3.16.0",
     "nodemon": "^3.1.4"
   }
 }

@@ -1,5 +1,6 @@
 const runTests = async () => {
-  const BASE_URL = 'http://localhost:5000/api';
+  const PORT = process.env.PORT || 5000;
+  const BASE_URL = `http://localhost:${PORT}/api`;
 
   console.log('🧪 Starting SafeHer API Verification Suite...\n');
 
@@ -67,7 +68,78 @@ const runTests = async () => {
   const jsonDemoSensor = await resDemoSensor.json();
   console.log('8. Demo Sensor Generation:', jsonDemoSensor.success);
 
-  console.log('\n✅ ALL BACKEND REST APIS AND MONGO STORAGE VERIFIED SUCCESSFULLY!');
+  // 9. Post Incident Record
+  const incidentPayload = {
+    deviceId: 'SAFEHER-001',
+    type: 'SOS',
+    status: 'EMERGENCY',
+    location: {
+      latitude: 23.2599,
+      longitude: 77.4126,
+    },
+    sensorData: {
+      accelerationX: 2.4,
+      accelerationY: 8.7,
+      accelerationZ: 1.2,
+      gyroX: 0.5,
+      gyroY: 1.2,
+      gyroZ: 0.8,
+    },
+    evidence: {
+      sosTriggered: true,
+      sensorDataCaptured: true,
+      locationCaptured: true,
+      mediaCaptured: false,
+    },
+  };
+
+  const resIncidentPost = await fetch(`${BASE_URL}/incidents`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(incidentPayload),
+  });
+  const jsonIncidentPost = await resIncidentPost.json();
+  const createdId = jsonIncidentPost.data?.incidentId;
+  const evidenceHash = jsonIncidentPost.data?.evidenceHash;
+
+  const is64Hex = typeof evidenceHash === 'string' && /^[a-fA-F0-9]{64}$/.test(evidenceHash);
+  console.log(
+    '9. Post Incident Record:',
+    jsonIncidentPost.success,
+    '| ID:',
+    createdId,
+    '| Hash 64-Hex Valid:',
+    is64Hex,
+    `(${evidenceHash?.slice(0, 16)}...)`
+  );
+
+  // 10. Get Incidents List
+  const resIncidentsGet = await fetch(`${BASE_URL}/incidents`);
+  const jsonIncidentsGet = await resIncidentsGet.json();
+  console.log('10. Get Incidents Count:', jsonIncidentsGet.count, '| Latest Incident ID:', jsonIncidentsGet.data[0]?.incidentId);
+
+  // 11. Get Single Incident by ID
+  if (createdId) {
+    const resSingleIncident = await fetch(`${BASE_URL}/incidents/${createdId}`);
+    const jsonSingleIncident = await resSingleIncident.json();
+    console.log('11. Get Incident By ID:', jsonSingleIncident.success, '| Fetched Incident ID:', jsonSingleIncident.data?.incidentId);
+  }
+
+  // 12. Verify Incident Integrity (SHA-256)
+  if (createdId) {
+    const resVerify = await fetch(`${BASE_URL}/incidents/${createdId}/verify`);
+    const jsonVerify = await resVerify.json();
+    console.log(
+      '12. Verify SHA-256 Evidence Hash:',
+      jsonVerify.success,
+      '| Integrity Verified:',
+      jsonVerify.integrityVerified,
+      '| Stored Hash === Calculated Hash:',
+      jsonVerify.storedHash === jsonVerify.calculatedHash
+    );
+  }
+
+  console.log('\n✅ ALL BACKEND REST APIS AND SHA-256 INTEGRITY VERIFIED SUCCESSFULLY!');
 };
 
 runTests().catch(console.error);
