@@ -22,8 +22,308 @@ const BACKEND_URL = (typeof import.meta !== "undefined" && import.meta.env && im
 let socket = null;
 let isBackendConnected = false;
 
-// Client Routing State ('/user' | '/admin')
+// Client Routing State ('/user' | '/admin' | '/login')
 let currentRoute = "/user";
+
+// ==========================================
+// 1.1 AUTHENTICATION & SESSION MANAGEMENT
+// ==========================================
+const STORAGE_KEY_TOKEN = "safeher_token";
+const STORAGE_KEY_USER = "safeher_user";
+
+const authStorage = {
+  getToken: () => localStorage.getItem(STORAGE_KEY_TOKEN),
+  setToken: (token) => localStorage.setItem(STORAGE_KEY_TOKEN, token),
+  getUser: () => {
+    try {
+      const u = localStorage.getItem(STORAGE_KEY_USER);
+      return u ? JSON.parse(u) : null;
+    } catch {
+      return null;
+    }
+  },
+  setUser: (user) => localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user)),
+  clear: () => {
+    localStorage.removeItem(STORAGE_KEY_TOKEN);
+    localStorage.removeItem(STORAGE_KEY_USER);
+  },
+  isAuthenticated: () => Boolean(localStorage.getItem(STORAGE_KEY_TOKEN)),
+  isAdmin: () => {
+    try {
+      const u = JSON.parse(localStorage.getItem(STORAGE_KEY_USER) || "{}");
+      return u?.role === "ADMIN";
+    } catch {
+      return false;
+    }
+  },
+};
+
+/**
+ * Centralized authenticated fetch wrapper.
+ * Automatically injects 'Authorization: Bearer <JWT>' header.
+ */
+async function authFetch(url, options = {}) {
+  const headers = new Headers(options.headers || {});
+  const token = authStorage.getToken();
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const response = await fetch(url, { ...options, headers });
+
+  // If token is expired or unauthorized (401), clear credentials and prompt login
+  if (response.status === 401 && authStorage.isAuthenticated()) {
+    console.warn("Session expired or invalid token. Redirecting to login...");
+    authStorage.clear();
+    updateHeaderAuthUI();
+    showAuthAlert("Your session has expired. Please sign in again.", "danger");
+    navigateToRoute("/login");
+  }
+
+  return response;
+}
+
+function updateHeaderAuthUI() {
+  const userPill = document.getElementById("headerUserPill");
+  const btnHeaderLogin = document.getElementById("btnHeaderLogin");
+  const userNameEl = document.getElementById("headerUserName");
+  const userRoleEl = document.getElementById("headerUserRole");
+  const userAvatarEl = document.getElementById("headerUserAvatar");
+
+  const user = authStorage.getUser();
+  const isAuth = authStorage.isAuthenticated() && user;
+
+  if (isAuth) {
+    if (userPill) userPill.style.display = "flex";
+    if (btnHeaderLogin) btnHeaderLogin.style.display = "none";
+    if (userNameEl) userNameEl.innerText = user.name || user.username || "User";
+    if (userRoleEl) {
+      userRoleEl.innerText = user.role || "USER";
+      userRoleEl.className = `badge-role user-role-badge ${user.role === "ADMIN" ? "role-admin" : "role-user"}`;
+    }
+    if (userAvatarEl) {
+      const initial = (user.name || user.username || "U").charAt(0).toUpperCase();
+      userAvatarEl.innerText = initial;
+    }
+  } else {
+    if (userPill) userPill.style.display = "none";
+    if (btnHeaderLogin) btnHeaderLogin.style.display = "inline-flex";
+  }
+}
+
+function switchAuthTab(tab) {
+  const tabBtnLogin = document.getElementById("tabBtnLogin");
+  const tabBtnRegister = document.getElementById("tabBtnRegister");
+  const formLogin = document.getElementById("formLogin");
+  const formRegister = document.getElementById("formRegister");
+  const authTitle = document.getElementById("authTitle");
+  const authSubtitle = document.getElementById("authSubtitle");
+
+  hideAuthAlert();
+
+  if (tab === "register") {
+    if (tabBtnLogin) tabBtnLogin.classList.remove("active");
+    if (tabBtnRegister) tabBtnRegister.classList.add("active");
+    if (formLogin) formLogin.classList.remove("active");
+    if (formRegister) formRegister.classList.add("active");
+    if (authTitle) authTitle.innerText = "Create SafeHer Account";
+    if (authSubtitle) authSubtitle.innerText = "Register your device profile for safety tracking";
+  } else {
+    if (tabBtnRegister) tabBtnRegister.classList.remove("active");
+    if (tabBtnLogin) tabBtnLogin.classList.add("active");
+    if (formRegister) formRegister.classList.remove("active");
+    if (formLogin) formLogin.classList.add("active");
+    if (authTitle) authTitle.innerText = "Sign in to SafeHer";
+    if (authSubtitle) authSubtitle.innerText = "Access IoT telemetry, emergency controls & monitoring";
+  }
+}
+
+function showAuthAlert(message, type = "danger") {
+  const alertBox = document.getElementById("authAlertBox");
+  const alertMessage = document.getElementById("authAlertMessage");
+  const alertIcon = document.getElementById("authAlertIcon");
+  if (!alertBox || !alertMessage) return;
+
+  alertBox.className = `auth-alert-banner ${type}`;
+  alertMessage.innerText = message;
+  if (alertIcon) {
+    alertIcon.innerText = type === "success" ? "✅" : "⚠️";
+  }
+}
+
+function hideAuthAlert() {
+  const alertBox = document.getElementById("authAlertBox");
+  if (alertBox) alertBox.className = "auth-alert-banner";
+}
+
+async function handleLoginSubmit(event) {
+  if (event) event.preventDefault();
+  hideAuthAlert();
+
+  const usernameInput = document.getElementById("loginUsername");
+  const passwordInput = document.getElementById("loginPassword");
+  const submitBtn = document.getElementById("btnLoginSubmit");
+
+  const username = usernameInput ? usernameInput.value.trim() : "";
+  const password = passwordInput ? passwordInput.value : "";
+
+  if (!username || !password) {
+    showAuthAlert("Please enter both username and password.", "danger");
+    return;
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<span>Signing in...</span>`;
+  }
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      showAuthAlert(data.message || "Invalid username or password.", "danger");
+      return;
+    }
+
+    // Save JWT token & safe user profile
+    authStorage.setToken(data.token);
+    authStorage.setUser(data.user);
+    updateHeaderAuthUI();
+    showToast(`Welcome, ${data.user.name || data.user.username}!`, "success");
+
+    // Clear password input
+    if (passwordInput) passwordInput.value = "";
+
+    // Route based on role
+    if (data.user.role === "ADMIN") {
+      navigateToRoute("/admin");
+    } else {
+      navigateToRoute("/user");
+    }
+  } catch (err) {
+    showAuthAlert("Network/server error connecting to SafeHer backend. Ensure backend is running.", "danger");
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = `
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+        <span>Login to SafeHer</span>
+      `;
+    }
+  }
+}
+
+async function handleRegisterSubmit(event) {
+  if (event) event.preventDefault();
+  hideAuthAlert();
+
+  const nameInput = document.getElementById("registerName");
+  const usernameInput = document.getElementById("registerUsername");
+  const emailInput = document.getElementById("registerEmail");
+  const passwordInput = document.getElementById("registerPassword");
+  const confirmPasswordInput = document.getElementById("registerConfirmPassword");
+  const submitBtn = document.getElementById("btnRegisterSubmit");
+
+  const name = nameInput ? nameInput.value.trim() : "";
+  const username = usernameInput ? usernameInput.value.trim() : "";
+  const email = emailInput ? emailInput.value.trim() : "";
+  const password = passwordInput ? passwordInput.value : "";
+  const confirmPassword = confirmPasswordInput ? confirmPasswordInput.value : "";
+
+  // 1. Required fields
+  if (!name || !username || !email || !password || !confirmPassword) {
+    showAuthAlert("All fields are required.", "danger");
+    return;
+  }
+
+  // 2. Email format validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    showAuthAlert("Please provide a valid email address.", "danger");
+    return;
+  }
+
+  // 3. Username length
+  if (username.length < 3) {
+    showAuthAlert("Username must be at least 3 characters long.", "danger");
+    return;
+  }
+
+  // 4. Password length
+  if (password.length < 6) {
+    showAuthAlert("Password must be at least 6 characters long.", "danger");
+    return;
+  }
+
+  // 5. Passwords match
+  if (password !== confirmPassword) {
+    showAuthAlert("Passwords do not match.", "danger");
+    return;
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<span>Creating Account...</span>`;
+  }
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, username, email, password }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      showAuthAlert(data.message || "Registration failed. Please check your inputs.", "danger");
+      return;
+    }
+
+    // Success: switch to login tab and prefill username
+    switchAuthTab("login");
+    const loginUsernameInput = document.getElementById("loginUsername");
+    if (loginUsernameInput) loginUsernameInput.value = username;
+
+    // Reset register form inputs
+    if (nameInput) nameInput.value = "";
+    if (usernameInput) usernameInput.value = "";
+    if (emailInput) emailInput.value = "";
+    if (passwordInput) passwordInput.value = "";
+    if (confirmPasswordInput) confirmPasswordInput.value = "";
+
+    showAuthAlert("Account created successfully! Please sign in with your password.", "success");
+    showToast("Account created! Please sign in.", "success");
+  } catch (err) {
+    showAuthAlert("Network/server error. Could not connect to SafeHer backend.", "danger");
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = `
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+        <span>Create Account</span>
+      `;
+    }
+  }
+}
+
+function handleLogout() {
+  const user = authStorage.getUser();
+  authStorage.clear();
+  updateHeaderAuthUI();
+  showToast(`Signed out of ${user?.name || "SafeHer"}.`, "info");
+  navigateToRoute("/login");
+  showAuthAlert("You have logged out successfully.", "success");
+}
 
 // Global Hardware State (Synced with MongoDB Device Model)
 const hardwareState = {
@@ -905,6 +1205,8 @@ function initRouter() {
 
     if (path.includes("/admin") || hash === "#admin") {
       switchView("/admin");
+    } else if (path.includes("/login") || path.includes("/auth") || hash === "#login" || hash === "#auth") {
+      switchView("/login");
     } else {
       switchView("/user");
     }
@@ -929,15 +1231,45 @@ function navigateToRoute(route) {
 }
 
 function switchView(route) {
-  currentRoute = route === "/admin" ? "/admin" : "/user";
+  const isAuth = authStorage.isAuthenticated();
+  const currentUser = authStorage.getUser();
+
+  // Route Protection & Role Guard
+  if (route === "/user") {
+    if (!isAuth) {
+      route = "/login";
+      showAuthAlert("Please sign in to access your SafeHer device dashboard.", "danger");
+    }
+  } else if (route === "/admin") {
+    if (!isAuth) {
+      route = "/login";
+      showAuthAlert("Administrator credentials required to access Emergency Command Center.", "danger");
+    } else if (currentUser?.role !== "ADMIN") {
+      showToast("Access Denied: Admin privileges required.", "danger");
+      route = "/user";
+    }
+  }
+
+  currentRoute = route === "/admin" ? "/admin" : (route === "/login" ? "/login" : "/user");
 
   const viewUser = document.getElementById("viewUser");
   const viewAdmin = document.getElementById("viewAdmin");
+  const viewAuth = document.getElementById("viewAuth");
   const btnUser = document.getElementById("btnRouteUser");
   const btnAdmin = document.getElementById("btnRouteAdmin");
   const headerAdminBadge = document.getElementById("headerAdminBadge");
 
-  if (currentRoute === "/admin") {
+  // Keep header auth status synchronized
+  updateHeaderAuthUI();
+
+  if (currentRoute === "/login") {
+    if (viewUser) viewUser.classList.remove("active");
+    if (viewAdmin) viewAdmin.classList.remove("active");
+    if (viewAuth) viewAuth.classList.add("active");
+    if (btnUser) btnUser.classList.remove("active");
+    if (btnAdmin) btnAdmin.classList.remove("active");
+  } else if (currentRoute === "/admin") {
+    if (viewAuth) viewAuth.classList.remove("active");
     if (viewUser) viewUser.classList.remove("active");
     if (viewAdmin) viewAdmin.classList.add("active");
     if (btnUser) btnUser.classList.remove("active");
@@ -949,6 +1281,8 @@ function switchView(route) {
       if (adminMap) adminMap.invalidateSize();
     }, 120);
   } else {
+    // /user view
+    if (viewAuth) viewAuth.classList.remove("active");
     if (viewAdmin) viewAdmin.classList.remove("active");
     if (viewUser) viewUser.classList.add("active");
     if (btnAdmin) btnAdmin.classList.remove("active");
@@ -1746,3 +2080,9 @@ window.showToast = showToast;
 window.navigateToRoute = navigateToRoute;
 window.startEmergencyGPS = startEmergencyGPS;
 window.stopEmergencyGPS = stopEmergencyGPS;
+window.switchAuthTab = switchAuthTab;
+window.handleLoginSubmit = handleLoginSubmit;
+window.handleRegisterSubmit = handleRegisterSubmit;
+window.handleLogout = handleLogout;
+window.authStorage = authStorage;
+window.authFetch = authFetch;
