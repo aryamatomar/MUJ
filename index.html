@@ -37,7 +37,10 @@
   <!-- App Container -->
   <div class="app-layout">
     
-    <!-- Sidebar Navigation -->
+    <!-- Sidebar Overlay Backdrop for Drawer -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- Collapsible Sidebar Navigation Drawer -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
         <div class="brand-logo">
@@ -53,15 +56,15 @@
             <span class="brand-tagline">Safety IoT Core</span>
           </div>
         </div>
-        <button class="btn-icon mobile-close-btn" id="sidebarCloseBtn" aria-label="Close Sidebar">
-          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        <button class="btn-icon mobile-close-btn" id="sidebarCloseBtn" aria-label="Close Sidebar" title="Close Navigation Drawer">
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2.2" fill="none"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
 
       <!-- Navigation Menu -->
       <nav class="nav-menu">
         <div class="nav-label">MAIN NAVIGATION</div>
-        <a href="#dashboard" class="nav-item active" data-tab="dashboard">
+        <a href="#dashboard" class="nav-item active" id="navItemDashboard" data-tab="dashboard">
           <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="3" width="7" height="9" rx="1"/>
             <rect x="14" y="3" width="7" height="5" rx="1"/>
@@ -70,28 +73,28 @@
           </svg>
           <span>Dashboard</span>
         </a>
-        <a href="#emergency" class="nav-item" data-tab="emergency">
+        <a href="#emergency" class="nav-item" id="navItemEmergency" data-tab="emergency">
           <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
           </svg>
           <span>Emergency SOS</span>
           <span class="badge-pill badge-sos-nav" id="navSosBadge">READY</span>
         </a>
-        <a href="#sensors" class="nav-item" data-tab="sensors">
+        <a href="#sensors" class="nav-item" id="navItemSensors" data-tab="sensors">
           <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
           </svg>
           <span>MPU6050 Sensor</span>
         </a>
-        <a href="#history" class="nav-item" data-tab="history">
+        <a href="#history" class="nav-item" id="navItemHistory" data-tab="history">
           <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"/>
             <polyline points="12 6 12 12 16 14"/>
           </svg>
           <span>Alert History</span>
-          <span class="count-bubble" id="historyCount">3</span>
+          <span class="count-bubble" id="historyCount">0</span>
         </a>
-        <a href="#device" class="nav-item" data-tab="device">
+        <a href="#device" class="nav-item" id="navItemDevice" data-tab="device">
           <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="4" y="4" width="16" height="16" rx="2"/>
             <rect x="9" y="9" width="6" height="6"/>
@@ -102,7 +105,7 @@
           </svg>
           <span>Device Hardware</span>
         </a>
-        <a href="#contacts" class="nav-item" data-tab="contacts">
+        <a href="#contacts" class="nav-item" id="navItemContacts" data-tab="contacts">
           <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
             <circle cx="9" cy="7" r="4"/>
@@ -111,7 +114,7 @@
           </svg>
           <span>Emergency Contacts</span>
         </a>
-        <a href="#settings" class="nav-item" data-tab="settings">
+        <a href="#settings" class="nav-item" id="navItemSettings" data-tab="settings">
           <svg viewBox="0 0 24 24" class="nav-icon" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="3"/>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -127,8 +130,8 @@
             <span class="pulse-dot"></span>
           </div>
           <div class="device-mini-info">
-            <span class="device-id">Node: ESP32-WS01</span>
-            <span class="device-proto-tag">Simulated Core v1.0</span>
+            <span class="device-id">Node: ESP8266-WS01</span>
+            <span class="device-proto-tag">Hardware Core v1.0</span>
           </div>
         </div>
       </div>
@@ -154,24 +157,11 @@
           <div class="route-switch-group" id="routeSwitchGroup">
             <button class="btn-route active" id="btnRouteUser" onclick="navigateToRoute('/user')" title="Girl's SafeHer Device Dashboard">
               <span>👩 User View</span>
-              <span class="badge-role user">Node WS-001</span>
             </button>
             <button class="btn-route" id="btnRouteAdmin" onclick="navigateToRoute('/admin')" title="Emergency Command & Monitoring Center">
               <span>🛡️ Admin Command</span>
               <span class="badge-role admin" id="headerAdminBadge">STANDBY</span>
             </button>
-          </div>
-
-          <!-- Backend Connection Status Indicator -->
-          <div class="proto-pill" id="backendStatusPill" title="Real-time Node.js & Socket.IO backend status">
-            <span class="proto-dot" id="backendStatusDot"></span>
-            <span id="backendStatusText">BACKEND: CONNECTING...</span>
-          </div>
-
-          <!-- Prototype Badge -->
-          <div class="proto-pill">
-            <span class="proto-dot"></span>
-            <span>Prototype • Hardware Ready</span>
           </div>
 
           <!-- User Profile & Logout (Step 2) -->
@@ -360,12 +350,6 @@
             <div>
               <h2 class="section-title">Live Safety Overview</h2>
               <p class="section-desc">Real-time status indicators and telemetry for wearable node WS-001</p>
-            </div>
-            <div class="actions-group">
-              <button class="btn-secondary" onclick="simulateSensorsOnce()">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-                Sync Sensors
-              </button>
             </div>
           </div>
 
@@ -569,27 +553,6 @@
 
           </div>
 
-          <!-- Quick Simulation Action Row -->
-          <div class="quick-simulation-banner">
-            <div class="quick-sim-info">
-              <div class="quick-sim-icon">⚡</div>
-              <div>
-                <h4 class="quick-sim-title">Interactive Hardware Simulation Engine</h4>
-                <p class="quick-sim-desc">Click below to simulate real-world panic situations or reset back to safety state.</p>
-              </div>
-            </div>
-            <div class="quick-sim-buttons">
-              <button class="btn-sos-test" onclick="triggerSOS()">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                TEST SOS ALERT
-              </button>
-              <button class="btn-reset-clean" onclick="resetAlert()">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
-                RESET ALERT
-              </button>
-            </div>
-          </div>
-
         </section>
 
         <!-- ============================================== -->
@@ -600,10 +563,7 @@
           <div class="section-header-row">
             <div>
               <h2 class="section-title">Emergency SOS Center</h2>
-              <p class="section-desc">High-priority trigger control & instant response simulation</p>
-            </div>
-            <div class="sim-notice-badge">
-              <span>Simulation Mode • Zero Actual Dialing</span>
+              <p class="section-desc">High-priority trigger control & instant responder broadcast</p>
             </div>
           </div>
 
@@ -711,7 +671,7 @@
             </div>
             <div class="badge-sim-data">
               <span class="pulse-dot-amber"></span>
-              SIMULATED SENSOR DATA
+              LIVE SENSOR TELEMETRY
             </div>
           </div>
 
