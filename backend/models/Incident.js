@@ -57,6 +57,10 @@ const incidentSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    blockchainTxHash: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: true,

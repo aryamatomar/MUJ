@@ -1,6 +1,9 @@
+import crypto from 'crypto';
 import Alert from '../models/Alert.js';
 import Device from '../models/Device.js';
+import Incident from '../models/Incident.js';
 import { isDbConnected } from '../config/db.js';
+import { calculateEvidenceHash, registerEvidenceOnChain, inMemoryIncidents } from './incidentController.js';
 
 // Fallback in-memory alerts
 const inMemoryAlerts = [
@@ -41,7 +44,8 @@ const inMemoryAlerts = [
 
 /**
  * POST /api/alerts/sos
- * Triggers SOS Emergency state on device and logs an Alert document
+ * Triggers SOS Emergency state on device, logs an Alert document,
+ * creates an Incident record, and registers evidence on-chain.
  */
 export const triggerSos = async (req, res, next) => {
   try {
@@ -100,7 +104,75 @@ export const triggerSos = async (req, res, next) => {
       };
     }
 
-    // 3. Broadcast SOS alert and updated device status over Socket.IO
+    // 3. Create corresponding Incident for Blockchain Evidence Tracking
+    let savedIncident = null;
+    try {
+      const finalIncidentId =
+        req.body.incidentId ||
+        `SH-INC-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+
+      const incidentData = {
+        incidentId: finalIncidentId,
+        deviceId,
+        type: type || 'SOS',
+        status: 'EMERGENCY',
+        timestamp: alertData.timestamp,
+        location: {
+          latitude: req.body.location?.latitude ?? null,
+          longitude: req.body.location?.longitude ?? null,
+        },
+        sensorData: {
+          accelerationX: req.body.sensorData?.accelerationX ?? null,
+          accelerationY: req.body.sensorData?.accelerationY ?? null,
+          accelerationZ: req.body.sensorData?.accelerationZ ?? null,
+          gyroX: req.body.sensorData?.gyroX ?? null,
+          gyroY: req.body.sensorData?.gyroY ?? null,
+          gyroZ: req.body.sensorData?.gyroZ ?? null,
+        },
+        evidence: {
+          sosTriggered: true,
+          sensorDataCaptured: Boolean(req.body.sensorData),
+          locationCaptured: Boolean(req.body.location),
+          mediaCaptured: Boolean(req.body.evidence?.mediaCaptured),
+        },
+        evidenceHash: null,
+        blockchainVerified: false,
+        blockchainTxHash: null,
+      };
+
+      // Generate SHA-256 evidence hash using existing helper
+      const evidenceHash = calculateEvidenceHash(incidentData);
+      incidentData.evidenceHash = evidenceHash;
+
+      // Save Incident safely
+      if (isDbConnected()) {
+        const existing = await Incident.findOne({ incidentId: finalIncidentId });
+        if (!existing) {
+          savedIncident = await Incident.create(incidentData);
+        } else {
+          savedIncident = existing;
+        }
+      } else {
+        savedIncident = {
+          _id: `mem-${Date.now()}`,
+          ...incidentData,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        inMemoryIncidents.unshift(savedIncident);
+      }
+
+      // Trigger non-blocking fire-and-forget blockchain registration
+      if (savedIncident && incidentData.evidenceHash) {
+        void registerEvidenceOnChain(finalIncidentId, incidentData.evidenceHash).catch((error) => {
+          console.error("Background blockchain registration failed:", error.message);
+        });
+      }
+    } catch (incidentErr) {
+      console.error("Incident creation / evidence tracking warning:", incidentErr.message);
+    }
+
+    // 4. Broadcast SOS alert, updated device status, and new Incident over Socket.IO
     const io = req.app.get('io');
     if (io) {
       io.emit('sosAlert', {
@@ -108,8 +180,13 @@ export const triggerSos = async (req, res, next) => {
         device: updatedDevice,
       });
       io.emit('deviceStatus', updatedDevice);
+
+      if (savedIncident) {
+        io.emit('newIncident', savedIncident);
+      }
     }
 
+    // 5. Return existing response structure
     return res.status(201).json({
       success: true,
       message: '🚨 Emergency SOS broadcasted and logged successfully.',
