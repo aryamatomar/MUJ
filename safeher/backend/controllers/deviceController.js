@@ -10,7 +10,6 @@ let fallbackDevice = {
   sosButton: 'INACTIVE',
   buzzer: 'OFF',
   rgbLed: 'GREEN',
-  batteryLevel: 92,
   wifiSignal: -55,
   lastSeen: new Date(),
   createdAt: new Date(),
@@ -36,7 +35,6 @@ export const getDeviceStatus = async (req, res, next) => {
           sosButton: 'INACTIVE',
           buzzer: 'OFF',
           rgbLed: 'GREEN',
-          batteryLevel: 92,
           wifiSignal: -55,
         });
       }
@@ -63,7 +61,7 @@ export const getDeviceStatus = async (req, res, next) => {
  */
 export const registerDevice = async (req, res, next) => {
   try {
-    const { deviceId, deviceName, batteryLevel, wifiSignal, status } = req.body;
+    const { deviceId, deviceName, wifiSignal, status } = req.body;
 
     if (!deviceId) {
       return res.status(400).json({
@@ -78,7 +76,6 @@ export const registerDevice = async (req, res, next) => {
         {
           $set: {
             deviceName: deviceName || 'SafeHer Band',
-            batteryLevel: batteryLevel !== undefined ? batteryLevel : 92,
             wifiSignal: wifiSignal !== undefined ? wifiSignal : -55,
             status: status || 'ONLINE',
             lastSeen: new Date(),
@@ -104,7 +101,6 @@ export const registerDevice = async (req, res, next) => {
       ...fallbackDevice,
       deviceId,
       deviceName: deviceName || fallbackDevice.deviceName,
-      batteryLevel: batteryLevel !== undefined ? batteryLevel : fallbackDevice.batteryLevel,
       wifiSignal: wifiSignal !== undefined ? wifiSignal : fallbackDevice.wifiSignal,
       status: status || fallbackDevice.status,
       lastSeen: new Date(),

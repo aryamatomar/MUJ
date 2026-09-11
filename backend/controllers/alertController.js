@@ -95,7 +95,6 @@ export const triggerSos = async (req, res, next) => {
         sosButton: 'ACTIVE',
         buzzer: 'ON',
         rgbLed: 'RED',
-        batteryLevel: 92,
         wifiSignal: -55,
         lastSeen: new Date(),
       };

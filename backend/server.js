@@ -9,6 +9,7 @@ import deviceRoutes from './routes/deviceRoutes.js';
 import sensorRoutes from './routes/sensorRoutes.js';
 import alertRoutes from './routes/alertRoutes.js';
 import demoRoutes from './routes/demoRoutes.js';
+import locationRoutes from './routes/locationRoutes.js';
 import { notFoundHandler, errorHandler } from './middleware/errorHandler.js';
 import Device from './models/Device.js';
 
@@ -66,6 +67,7 @@ app.use('/api/device', deviceRoutes);
 app.use('/api/sensor', sensorRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/demo', demoRoutes);
+app.use('/api/location', locationRoutes);
 
 // 404 and Global Error Handlers
 app.use(notFoundHandler);
@@ -86,7 +88,6 @@ io.on('connection', async (socket) => {
       sosButton: 'INACTIVE',
       buzzer: 'OFF',
       rgbLed: 'GREEN',
-      batteryLevel: 92,
       wifiSignal: -55,
       lastSeen: new Date(),
     };

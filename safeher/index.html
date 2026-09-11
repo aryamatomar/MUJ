@@ -9,6 +9,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Leaflet CSS & JS for Admin Real-Time Emergency Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <!-- Stylesheet -->
   <link rel="stylesheet" href="style.css" />
   <!-- Socket.IO Client for Real-time ESP32 & Backend Telemetry -->
@@ -131,6 +134,18 @@
         </div>
 
         <div class="header-right">
+          <!-- Route Switcher (/user vs /admin) -->
+          <div class="route-switch-group" id="routeSwitchGroup">
+            <button class="btn-route active" id="btnRouteUser" onclick="navigateToRoute('/user')" title="Girl's SafeHer Device Dashboard">
+              <span>👩 User View</span>
+              <span class="badge-role user">Node WS-001</span>
+            </button>
+            <button class="btn-route" id="btnRouteAdmin" onclick="navigateToRoute('/admin')" title="Emergency Command & Monitoring Center">
+              <span>🛡️ Admin Command</span>
+              <span class="badge-role admin" id="headerAdminBadge">STANDBY</span>
+            </button>
+          </div>
+
           <!-- Backend Connection Status Indicator -->
           <div class="proto-pill" id="backendStatusPill" title="Real-time Node.js & Socket.IO backend status">
             <span class="proto-dot" id="backendStatusDot"></span>
@@ -172,8 +187,12 @@
         </div>
       </div>
 
-      <!-- Dashboard Container -->
-      <div class="content-wrapper">
+      <!-- ============================================== -->
+      <!-- USER / GIRL DASHBOARD VIEW                    -->
+      <!-- ============================================== -->
+      <div id="viewUser" class="role-view active">
+        <!-- Dashboard Container -->
+        <div class="content-wrapper">
 
         <!-- ============================================== -->
         <!-- SECTION 1: DASHBOARD OVERVIEW                 -->
@@ -200,7 +219,7 @@
             <!-- Card 1: Device Status -->
             <div class="status-card" id="cardDeviceStatus">
               <div class="card-header">
-                <span class="card-title">Device Status</span>
+                <span class="card-title">Device Connection</span>
                 <span class="card-icon-tag bg-cyan-soft">
                   <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
                 </span>
@@ -211,8 +230,8 @@
                   <span class="card-main-val text-green" id="deviceStatusText">ONLINE</span>
                 </div>
                 <div class="card-footer-info">
-                  <span>ESP32 Node WS-001</span>
-                  <span class="badge-subtle">Wi-Fi Strong</span>
+                  <span>ESP8266 Node WS-001</span>
+                  <span class="badge-subtle" id="deviceWifiBadge">Connected</span>
                 </div>
               </div>
             </div>
@@ -248,11 +267,11 @@
               <div class="card-body">
                 <div class="card-value-row">
                   <span class="status-indicator status-green" id="sosStatusDot"></span>
-                  <span class="card-main-val text-green" id="sosStatusText">READY</span>
+                  <span class="card-main-val text-green" id="sosStatusText">SOS BUTTON — READY</span>
                 </div>
                 <div class="card-footer-info">
                   <span>Physical Tactile Switch</span>
-                  <span class="badge-subtle">Arm State: Active</span>
+                  <span class="badge-subtle" id="sosSubBadge">Arm State: Active</span>
                 </div>
               </div>
             </div>
@@ -317,24 +336,22 @@
               </div>
             </div>
 
-            <!-- Card 7: Battery & Activity -->
-            <div class="status-card" id="cardBatteryStatus">
+            <!-- Card 7: Motion Detection -->
+            <div class="status-card" id="cardMotionStatus">
               <div class="card-header">
-                <span class="card-title">Battery & Power</span>
+                <span class="card-title">Motion Detection</span>
                 <span class="card-icon-tag bg-cyan-soft">
-                  <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><rect x="1" y="6" width="18" height="12" rx="2"/><line x1="23" y1="11" x2="23" y2="13"/></svg>
+                  <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/></svg>
                 </span>
               </div>
               <div class="card-body">
                 <div class="card-value-row">
-                  <span class="battery-bar-container">
-                    <span class="battery-bar-fill" id="batteryBarFill" style="width: 88%;"></span>
-                  </span>
-                  <span class="card-main-val" id="batteryPercentText">88%</span>
+                  <span class="status-indicator status-green" id="motionStatusDot"></span>
+                  <span class="card-main-val text-green" id="motionStatusText">NORMAL</span>
                 </div>
                 <div class="card-footer-info">
-                  <span id="lastActivityText">Last ping: Just now</span>
-                  <span class="badge-subtle">3.95V LiPo</span>
+                  <span id="motionActivitySub">No motion detected</span>
+                  <span class="badge-subtle" id="motionSensorBadge">Active Monitor</span>
                 </div>
               </div>
             </div>
@@ -355,6 +372,31 @@
                 <div class="card-footer-info">
                   <span id="lastAlertTimeText">Latest: 12:30 PM</span>
                   <span class="badge-subtle">Log Active</span>
+                </div>
+              </div>
+            <!-- Card 9: Emergency Live GPS Sharing Status (PRIVACY: ONLY ACTIVE DURING SOS) -->
+            <div class="status-card" id="cardGpsSharing">
+              <div class="card-header">
+                <span class="card-title">Emergency Live GPS</span>
+                <span class="gps-privacy-badge">🔒 SOS-Triggered Only</span>
+              </div>
+              <div class="card-body">
+                <div class="card-value-row">
+                  <span class="status-indicator status-gray" id="userGpsDot"></span>
+                  <span class="card-main-val text-muted" id="userGpsStatusText">Location sharing inactive</span>
+                </div>
+                <div class="card-footer-info">
+                  <span id="userGpsSubText">Normal state: GPS disabled for privacy</span>
+                  <span class="badge-subtle" id="userGpsBadge">Standby</span>
+                </div>
+
+                <!-- Location Permission Denied Alert (Appears only if user denied browser permission during SOS) -->
+                <div class="gps-alert-box" id="userGpsDeniedAlert" style="display: none;">
+                  <span class="gps-alert-icon">⚠️</span>
+                  <div class="gps-alert-text">
+                    <h5>Location Access Required</h5>
+                    <p>Location permission denied. Please allow location access to share your live location during this emergency.</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -458,10 +500,10 @@
             <div class="card-generic">
               <h4 class="card-inner-title">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                Simulated ESP32 Hardware Sequence
+                Simulated ESP8266 Hardware Sequence
               </h4>
               <ul class="steps-list">
-                <li><span class="step-num">1</span> <strong>Tactile Button Pressed:</strong> ESP32 interrupts GPIO 4 input.</li>
+                <li><span class="step-num">1</span> <strong>Tactile Button Pressed:</strong> ESP8266 interrupts GPIO 4 input.</li>
                 <li><span class="step-num">2</span> <strong>Visual Alarm:</strong> Neopixel / RGB LED transitions instantly to flashing <strong>RED</strong>.</li>
                 <li><span class="step-num">3</span> <strong>Auditory Alarm:</strong> High-decibel Piezo Buzzer turns <strong>ON</strong> (2.7 kHz pulse).</li>
                 <li><span class="step-num">4</span> <strong>Cloud Transmission:</strong> Encrypted telemetry packet dispatched to dashboard.</li>
@@ -689,28 +731,28 @@
           <div class="section-header-row">
             <div>
               <h2 class="section-title">Hardware Architecture & Peripherals</h2>
-              <p class="section-desc">Physical components and communication pinout overview for ESP32</p>
+              <p class="section-desc">Physical components and communication pinout overview for ESP8266</p>
             </div>
-            <div class="badge-subtle">Target Platform: ESP32 NodeMCU</div>
+            <div class="badge-subtle">Target Platform: ESP8266 NodeMCU</div>
           </div>
 
           <!-- Hardware Components Grid -->
           <div class="hardware-grid">
             
-            <!-- Component 1: ESP32 -->
+            <!-- Component 1: ESP8266 -->
             <div class="card-generic hardware-item-card">
               <div class="hardware-icon-wrap">
                 <svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" stroke-width="2" fill="none"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>
               </div>
               <div class="hardware-details">
                 <div class="hw-top-row">
-                  <h4 class="hw-name">ESP32 Microcontroller</h4>
+                  <h4 class="hw-name">ESP8266 Microcontroller</h4>
                   <span class="badge-status-green">Online</span>
                 </div>
-                <p class="hw-desc">Dual-core Tensilica LX6, 240MHz, 520KB SRAM with integrated 2.4GHz Wi-Fi and Bluetooth.</p>
+                <p class="hw-desc">Tensilica L106 32-bit RISC processor, 80/160MHz with integrated 2.4GHz Wi-Fi stack.</p>
                 <div class="hw-specs">
-                  <span>Core Voltage: 3.3V</span>
-                  <span>Firmware: v1.0.4-sim</span>
+                  <span>Operating Voltage: 3.3V</span>
+                  <span>Firmware: v1.0.4</span>
                 </div>
               </div>
             </div>
@@ -977,6 +1019,178 @@
 
         </section>
 
+        </div><!-- /.content-wrapper -->
+      </div><!-- /#viewUser -->
+
+      <!-- ============================================== -->
+      <!-- ADMIN / EMERGENCY COMMAND DASHBOARD VIEW       -->
+      <!-- ============================================== -->
+      <div id="viewAdmin" class="role-view">
+        <div class="content-wrapper">
+          <div class="admin-command-view">
+
+            <!-- 1. Admin Live Emergency Status Hero Banner -->
+            <div class="admin-status-hero normal" id="adminStatusHero">
+              <div class="admin-hero-left">
+                <div class="admin-hero-icon normal" id="adminHeroIcon">
+                  <span id="adminHeroEmoji">🟢</span>
+                </div>
+                <div>
+                  <h2 class="admin-hero-title normal" id="adminHeroTitle">NO ACTIVE EMERGENCY</h2>
+                  <p class="admin-hero-sub" id="adminHeroSub">SafeHer monitoring system active • Phone GPS sharing is inactive for privacy</p>
+                </div>
+              </div>
+              <div class="admin-hero-right">
+                <button class="btn-resolve-emergency" id="btnAdminResolve" onclick="resetAlert()" style="display: none;">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+                  Resolve / Reset Emergency
+                </button>
+              </div>
+            </div>
+
+            <!-- 2. Admin Emergency Telemetry Metrics Grid -->
+            <div class="admin-metrics-grid">
+              <!-- SOS Status -->
+              <div class="admin-metric-card" id="adminCardSos">
+                <span class="admin-metric-label">SOS Status</span>
+                <div class="admin-metric-value">
+                  <span class="status-indicator status-green" id="adminSosDot"></span>
+                  <span id="adminSosVal" class="text-green">READY</span>
+                </div>
+                <span class="admin-metric-sub" id="adminSosSub">Tactile Switch Standby</span>
+              </div>
+
+              <!-- Device Status -->
+              <div class="admin-metric-card" id="adminCardDevice">
+                <span class="admin-metric-label">ESP8266 Device</span>
+                <div class="admin-metric-value">
+                  <span class="status-indicator status-green" id="adminDeviceDot"></span>
+                  <span id="adminDeviceVal" class="text-green">ONLINE</span>
+                </div>
+                <span class="admin-metric-sub" id="adminDeviceSub">Node: SAFEHER-001</span>
+              </div>
+
+              <!-- Motion Sensor -->
+              <div class="admin-metric-card" id="adminCardMotion">
+                <span class="admin-metric-label">Motion Status</span>
+                <div class="admin-metric-value">
+                  <span class="status-indicator status-green" id="adminMotionDot"></span>
+                  <span id="adminMotionVal" class="text-green">NORMAL</span>
+                </div>
+                <span class="admin-metric-sub" id="adminMotionSub">No abnormal motion</span>
+              </div>
+
+              <!-- Buzzer Alarm -->
+              <div class="admin-metric-card" id="adminCardBuzzer">
+                <span class="admin-metric-label">Buzzer Alarm</span>
+                <div class="admin-metric-value">
+                  <span class="status-indicator status-gray" id="adminBuzzerDot"></span>
+                  <span id="adminBuzzerVal" class="text-muted">OFF</span>
+                </div>
+                <span class="admin-metric-sub" id="adminBuzzerSub">85dB Piezo Silent</span>
+              </div>
+
+              <!-- GPS Live Tracking -->
+              <div class="admin-metric-card" id="adminCardGps">
+                <span class="admin-metric-label">Emergency GPS</span>
+                <div class="admin-metric-value">
+                  <span class="status-indicator status-gray" id="adminGpsDot"></span>
+                  <span id="adminGpsVal" class="text-muted">Not being shared</span>
+                </div>
+                <span class="admin-metric-sub" id="adminGpsSub">Privacy protected in SAFE mode</span>
+              </div>
+
+              <!-- GPS Accuracy -->
+              <div class="admin-metric-card" id="adminCardAccuracy">
+                <span class="admin-metric-label">GPS Accuracy</span>
+                <div class="admin-metric-value">
+                  <span id="adminAccuracyVal" class="text-muted">--</span>
+                </div>
+                <span class="admin-metric-sub" id="adminAccuracySub">Browser Geolocation</span>
+              </div>
+
+              <!-- Last Location Update -->
+              <div class="admin-metric-card" id="adminCardLastUpdate">
+                <span class="admin-metric-label">Last Location Update</span>
+                <div class="admin-metric-value">
+                  <span id="adminLastUpdateVal" style="font-size: 16px;">--:--:--</span>
+                </div>
+                <span class="admin-metric-sub" id="adminLastUpdateSub">Live Socket.IO Stream</span>
+              </div>
+
+              <!-- Incident ID -->
+              <div class="admin-metric-card" id="adminCardIncident">
+                <span class="admin-metric-label">Incident Reference</span>
+                <div class="admin-metric-value">
+                  <span id="adminIncidentVal" style="font-size: 15px; font-family: monospace;">INC-STANDBY</span>
+                </div>
+                <span class="admin-metric-sub" id="adminIncidentSub">SHA-256 Audit Log</span>
+              </div>
+
+              <!-- Emergency Start Time -->
+              <div class="admin-metric-card" id="adminCardStartTime">
+                <span class="admin-metric-label">Emergency Start Time</span>
+                <div class="admin-metric-value">
+                  <span id="adminStartTimeVal" style="font-size: 16px;">--</span>
+                </div>
+                <span class="admin-metric-sub" id="adminStartTimeSub">Timestamp Recorded</span>
+              </div>
+            </div>
+
+            <!-- 3. Admin Interactive Map & Live Coordinate Panel -->
+            <div class="admin-map-section">
+              <div class="admin-map-header">
+                <div>
+                  <h3 class="section-title" style="font-size: 18px; margin-bottom: 2px;">Live Emergency Geolocation Tracking</h3>
+                  <p class="section-desc" style="font-size: 13px;">Real-time GPS coordinates transmitted directly from the girl's phone browser during SOS</p>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span class="badge-role admin" id="adminMapLiveBadge" style="display: none;">
+                    <span class="pulse-dot"></span> LIVE EMERGENCY TRACKING
+                  </span>
+                  <span class="badge-role user" id="adminMapStandbyBadge">
+                    🔒 GPS PROTECTED (STANDBY)
+                  </span>
+                </div>
+              </div>
+
+              <!-- Map Container Wrapper -->
+              <div class="admin-map-wrapper">
+                <div id="adminMap"></div>
+                <!-- Standby overlay shown when NOT in emergency or location not yet arrived -->
+                <div class="admin-map-overlay-standby" id="adminMapStandbyOverlay">
+                  <div class="admin-map-overlay-icon">📍</div>
+                  <h4 style="font-size: 16px; font-weight: 700; color: #fff;">GPS Tracking Standby</h4>
+                  <p style="font-size: 13px; color: #94a3b8; max-width: 420px; line-height: 1.5;">
+                    Location tracking is <strong>strictly disabled during normal state</strong> to preserve user privacy. 
+                    When the physical SOS button is pressed, the girl's browser will request permission and stream live coordinates here in real time.
+                  </p>
+                </div>
+              </div>
+
+              <!-- Real Coordinate Readout Panel (NO FAKE GPS!) -->
+              <div class="admin-coords-panel">
+                <div class="admin-coord-item">
+                  <span class="admin-coord-label">Latitude</span>
+                  <span class="admin-coord-val" id="adminPanelLat">--</span>
+                </div>
+                <div class="admin-coord-item">
+                  <span class="admin-coord-label">Longitude</span>
+                  <span class="admin-coord-val" id="adminPanelLng">--</span>
+                </div>
+                <div class="admin-coord-item">
+                  <span class="admin-coord-label">Estimated Accuracy</span>
+                  <span class="admin-coord-val" id="adminPanelAcc">--</span>
+                </div>
+                <div class="admin-coord-item">
+                  <span class="admin-coord-label">Last Transmission</span>
+                  <span class="admin-coord-val" id="adminPanelTime">--</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
       </div>
     </main>
   </div>

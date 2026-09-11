@@ -1,35 +1,39 @@
 /**
  * ==============================================================================
- * SafeHer — Women Safety IoT Dashboard
- * Frontend Core Logic & Real-time Backend Engine (Version 1.1)
+ * SafeHer — Women Safety IoT Dashboard & Emergency Tracking System
+ * Frontend Core Logic & Real-time Backend Engine (Version 2.0)
  * 
  * Features:
  * - Real-time Socket.IO communication with Node.js & MongoDB backend
- * - Instant fallback to local simulation if backend is offline
+ * - Emergency-Only GPS: Phone browser GPS is strictly requested & transmitted ONLY during SOS
+ * - Admin Emergency Command Center & Live Leaflet Map tracking
+ * - Dual Route Architecture: /user (Girl Dashboard) & /admin (Emergency Command)
  * - MPU6050 Live Waveform Canvas Graph
- * - Interactive SOS trigger and Reset flow with REST API calls
+ * - Complete removal of battery telemetry
  * ==============================================================================
  */
 
 // ==========================================
-// 1. BACKEND & HARDWARE STATE
+// 1. BACKEND & APPLICATION STATE
 // ==========================================
 const BACKEND_URL = "http://localhost:5000";
 let socket = null;
 let isBackendConnected = false;
 
+// Client Routing State ('/user' | '/admin')
+let currentRoute = "/user";
+
 // Global Hardware State (Synced with MongoDB Device Model)
 const hardwareState = {
   deviceId: "SAFEHER-001",
   deviceName: "SafeHer Band",
-  deviceStatus: "ONLINE",     // 'ONLINE' | 'OFFLINE'
+  deviceStatus: "ONLINE",     // 'ONLINE' | 'OFFLINE' (ESP8266)
   safetyStatus: "SAFE",       // 'SAFE' | 'EMERGENCY'
-  sosButton: "INACTIVE",      // 'READY' | 'INACTIVE' | 'ACTIVE'
+  sosButton: "READY",         // 'READY' | 'ACTIVATED'
+  motionStatus: "NORMAL",     // 'NORMAL' | 'MOTION DETECTED'
   mpuStatus: "CONNECTED",     // 'CONNECTED' | 'DISCONNECTED'
   buzzer: "OFF",              // 'OFF' | 'ON'
   rgbLed: "GREEN",            // 'GREEN' | 'RED'
-  batteryLevel: 92,           // Percentage (0 - 100)
-  batteryVoltage: 3.95,       // Volts
   lastPingTime: new Date(),
   alertsCountToday: 3,
   
@@ -37,6 +41,18 @@ const hardwareState = {
   accel: { x: 0.24, y: 0.91, z: 9.72 },
   gyro: { x: 1.20, y: 0.85, z: 2.10 }
 };
+
+// Emergency GPS Lifecycle State
+let geoWatchId = null;
+let currentEmergencyLocation = null;
+let gpsState = "INACTIVE"; // 'INACTIVE' | 'REQUESTING_PERMISSION' | 'ACTIVE' | 'DENIED' | 'UNAVAILABLE' | 'STOPPED'
+let emergencyStartTime = null;
+let activeIncidentId = "INC-STANDBY";
+
+// Admin Leaflet Map State
+let adminMap = null;
+let adminMarker = null;
+let adminAccuracyCircle = null;
 
 // Simulation settings
 let simIntervalMs = 1500;
@@ -84,7 +100,10 @@ const waveHistory = {
 // 2. LIFECYCLE & INITIALIZATION
 // ==========================================
 document.addEventListener("DOMContentLoaded", () => {
-  console.log("SafeHer Dashboard initialized (Backend-Connected v1.1)");
+  console.log("SafeHer Web App initialized (Architecture v2.0 - Emergency GPS Only)");
+
+  // Setup client routing (/user vs /admin)
+  initRouter();
 
   // Setup tab navigation
   initNavigation();
@@ -97,6 +116,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Render initial dashboard values
   updateDashboard();
+
+  // Initialize GPS UI in default inactive privacy state (NEVER request GPS on load)
+  updateUserGPSUI("INACTIVE", "Location sharing inactive");
+  clearAdminLocationDisplay();
 
   // Start periodic local sensor simulation (keeps dashboard active if backend is offline)
   startSensorSimulation();
@@ -158,16 +181,28 @@ function initBackendConnection() {
       if (device) {
         hardwareState.deviceStatus = device.status || hardwareState.deviceStatus;
         hardwareState.safetyStatus = device.safetyStatus || hardwareState.safetyStatus;
-        hardwareState.sosButton = device.sosButton === "ACTIVE" ? "ACTIVE" : (device.sosButton === "READY" ? "READY" : "INACTIVE");
+        hardwareState.sosButton = (device.sosButton === "ACTIVE" || device.sosButton === "ACTIVATED") ? "ACTIVATED" : "READY";
+        if (device.motionStatus) {
+          hardwareState.motionStatus = device.motionStatus;
+        } else if (device.safetyStatus === "EMERGENCY") {
+          hardwareState.motionStatus = "MOTION DETECTED";
+        }
         hardwareState.buzzer = device.buzzer || hardwareState.buzzer;
         hardwareState.rgbLed = device.rgbLed || hardwareState.rgbLed;
-        hardwareState.batteryLevel = device.batteryLevel !== undefined ? device.batteryLevel : hardwareState.batteryLevel;
         hardwareState.lastPingTime = new Date();
+
+        // If backend state says EMERGENCY, start browser emergency GPS
+        if (hardwareState.safetyStatus === "EMERGENCY" && geoWatchId === null) {
+          startEmergencyGPS();
+        } else if (hardwareState.safetyStatus === "SAFE" && geoWatchId !== null) {
+          stopEmergencyGPS();
+        }
+
         updateDashboard();
       }
     });
 
-    // --- REAL-TIME EVENT: MPU6050 SENSOR TELEMETRY ---
+    // --- REAL-TIME EVENT: SENSOR TELEMETRY & MOTION DETECTION ---
     socket.on("sensorData", (data) => {
       if (data) {
         const ax = data.accelerationX !== undefined ? data.accelerationX : hardwareState.accel.x;
@@ -180,6 +215,20 @@ function initBackendConnection() {
         hardwareState.accel = { x: ax, y: ay, z: az };
         hardwareState.gyro = { x: gx, y: gy, z: gz };
 
+        // Determine real-time motion detection from sensor acceleration deviation or flag
+        const totalAccel = Math.sqrt(ax * ax + ay * ay + az * az);
+        const isSignificantMotion = Math.abs(totalAccel - 9.81) > 2.2 || Math.abs(gx) > 4.0 || Math.abs(gy) > 4.0 || Math.abs(gz) > 4.0;
+        
+        if (data.motionStatus) {
+          hardwareState.motionStatus = data.motionStatus;
+        } else if (data.motionDetected !== undefined) {
+          hardwareState.motionStatus = data.motionDetected ? "MOTION DETECTED" : "NORMAL";
+        } else if (isSignificantMotion || hardwareState.safetyStatus === "EMERGENCY") {
+          hardwareState.motionStatus = "MOTION DETECTED";
+        } else {
+          hardwareState.motionStatus = "NORMAL";
+        }
+
         // Push live values to waveform history
         waveHistory.x.shift();
         waveHistory.x.push(ax);
@@ -189,6 +238,7 @@ function initBackendConnection() {
         waveHistory.z.push(az);
 
         updateSensorDisplay();
+        updateDashboard();
       }
     });
 
@@ -196,14 +246,17 @@ function initBackendConnection() {
     socket.on("sosAlert", (payload) => {
       console.log("🚨 Emergency SOS Alert received from backend:", payload);
       hardwareState.safetyStatus = "EMERGENCY";
-      hardwareState.sosButton = "ACTIVE";
+      hardwareState.sosButton = "ACTIVATED";
+      hardwareState.motionStatus = "MOTION DETECTED";
       hardwareState.buzzer = "ON";
       hardwareState.rgbLed = "RED";
       hardwareState.alertsCountToday += 1;
       hardwareState.lastPingTime = new Date();
+      emergencyStartTime = new Date();
 
       if (payload && payload.alert) {
         const alert = payload.alert;
+        activeIncidentId = alert._id ? `INC-${String(alert._id).slice(-6).toUpperCase()}` : `INC-${Math.floor(100000 + Math.random() * 900000)}`;
         addAlertRecord({
           id: alert._id || Date.now(),
           date: (alert.timestamp ? new Date(alert.timestamp) : new Date()).toISOString().split("T")[0],
@@ -213,7 +266,12 @@ function initBackendConnection() {
           status: "Active Alert",
           statusType: "danger"
         });
+      } else {
+        activeIncidentId = `INC-${Math.floor(100000 + Math.random() * 900000)}`;
       }
+
+      // Start Browser Geolocation ONLY on emergency trigger
+      startEmergencyGPS();
 
       updateDashboard();
       playSimulatedBeep();
@@ -224,13 +282,33 @@ function initBackendConnection() {
     socket.on("alertResolved", (payload) => {
       console.log("✅ Alert Resolved event received:", payload);
       hardwareState.safetyStatus = "SAFE";
-      hardwareState.sosButton = "INACTIVE";
+      hardwareState.sosButton = "READY";
+      hardwareState.motionStatus = "NORMAL";
       hardwareState.buzzer = "OFF";
       hardwareState.rgbLed = "GREEN";
       hardwareState.lastPingTime = new Date();
 
+      // Stop Geolocation tracking immediately
+      stopEmergencyGPS();
+
       updateDashboard();
       showToast("✅ System Reset: Device returned to SAFE state.", "success");
+    });
+
+    // --- REAL-TIME EVENT: LIVE EMERGENCY LOCATION UPDATES (For Admin) ---
+    socket.on("locationUpdate", (locData) => {
+      console.log("📍 Live Location Update received via Socket.IO:", locData);
+      if (locData) {
+        currentEmergencyLocation = locData;
+        updateAdminLocationDisplay(locData);
+      }
+    });
+
+    socket.on("liveLocation", (locData) => {
+      if (locData) {
+        currentEmergencyLocation = locData;
+        updateAdminLocationDisplay(locData);
+      }
     });
 
   } catch (err) {
@@ -266,11 +344,21 @@ async function syncDeviceFromBackend() {
       if (json.success && json.data) {
         const d = json.data;
         hardwareState.deviceId = d.deviceId || hardwareState.deviceId;
+        hardwareState.deviceStatus = d.status || hardwareState.deviceStatus;
         hardwareState.safetyStatus = d.safetyStatus || hardwareState.safetyStatus;
-        hardwareState.sosButton = d.sosButton === "ACTIVE" ? "ACTIVE" : (d.sosButton === "READY" ? "READY" : "INACTIVE");
+        hardwareState.sosButton = (d.sosButton === "ACTIVE" || d.sosButton === "ACTIVATED") ? "ACTIVATED" : "READY";
+        if (d.motionStatus) {
+          hardwareState.motionStatus = d.motionStatus;
+        } else if (d.safetyStatus === "EMERGENCY") {
+          hardwareState.motionStatus = "MOTION DETECTED";
+        }
         hardwareState.buzzer = d.buzzer || hardwareState.buzzer;
         hardwareState.rgbLed = d.rgbLed || hardwareState.rgbLed;
-        hardwareState.batteryLevel = d.batteryLevel !== undefined ? d.batteryLevel : hardwareState.batteryLevel;
+
+        if (hardwareState.safetyStatus === "EMERGENCY" && geoWatchId === null) {
+          startEmergencyGPS();
+        }
+
         updateDashboard();
       }
     }
@@ -313,18 +401,21 @@ async function fetchAlertHistoryFromBackend() {
 
 /**
  * Triggers SOS Emergency sequence.
- * Calls backend POST /api/alerts/sos and falls back to local state if offline.
+ * Calls backend POST /api/alerts/sos and activates browser emergency GPS.
  */
 async function triggerSOS() {
   console.log("🚨 triggerSOS invoked");
 
   // Immediate optimistic UI update
   hardwareState.safetyStatus = "EMERGENCY";
-  hardwareState.sosButton = "ACTIVE";
+  hardwareState.sosButton = "ACTIVATED";
+  hardwareState.motionStatus = "MOTION DETECTED";
   hardwareState.buzzer = "ON";
   hardwareState.rgbLed = "RED";
   hardwareState.alertsCountToday += 1;
   hardwareState.lastPingTime = new Date();
+  emergencyStartTime = new Date();
+  activeIncidentId = `INC-${Math.floor(100000 + Math.random() * 900000)}`;
 
   const currentTimeStr = formatTimeAMPM(new Date());
   const currentDateStr = new Date().toISOString().split("T")[0];
@@ -338,6 +429,9 @@ async function triggerSOS() {
     status: "Active Alert",
     statusType: "danger"
   });
+
+  // Start Browser Geolocation ONLY on emergency trigger
+  startEmergencyGPS();
 
   updateDashboard();
   playSimulatedBeep();
@@ -358,6 +452,10 @@ async function triggerSOS() {
       });
       const data = await res.json();
       console.log("Backend SOS API response:", data);
+      if (data?.alert?._id) {
+        activeIncidentId = `INC-${String(data.alert._id).slice(-6).toUpperCase()}`;
+        updateDashboard();
+      }
     } catch (err) {
       console.warn("Could not send SOS to backend API:", err.message);
     }
@@ -366,16 +464,20 @@ async function triggerSOS() {
 
 /**
  * Resets system back to SAFE status.
- * Calls backend POST /api/device/reset and falls back to local state if offline.
+ * Calls backend POST /api/device/reset and halts GPS tracking.
  */
 async function resetAlert() {
   console.log("✅ resetAlert invoked");
 
   hardwareState.safetyStatus = "SAFE";
   hardwareState.sosButton = "READY";
+  hardwareState.motionStatus = "NORMAL";
   hardwareState.buzzer = "OFF";
   hardwareState.rgbLed = "GREEN";
   hardwareState.lastPingTime = new Date();
+
+  // Stop Geolocation tracking immediately
+  stopEmergencyGPS();
 
   updateDashboard();
   showToast("✅ System Reset: Device WS-001 returned to SAFE state.", "success");
@@ -404,13 +506,14 @@ async function resetAlert() {
 function getDeviceStatus() {
   return {
     status: hardwareState.deviceStatus,
-    battery: hardwareState.batteryLevel,
+    motionStatus: hardwareState.motionStatus,
+    sosButton: hardwareState.sosButton,
     isMpuConnected: hardwareState.mpuStatus === "CONNECTED"
   };
 }
 
 /**
- * Generates local simulated MPU6050 reading when real ESP32 stream is idle
+ * Generates local simulated MPU6050 reading when real ESP stream is idle
  */
 function getSensorData() {
   if (hardwareState.safetyStatus === "EMERGENCY") {
@@ -436,24 +539,447 @@ function getSensorData() {
   }
 }
 
+// ==========================================
+// 5. EMERGENCY-ONLY GPS IMPLEMENTATION
+// ==========================================
+
 /**
- * Global UI synchronizer - updates all DOM elements based on `hardwareState`.
+ * Starts browser geolocation tracking ONLY during an active emergency.
+ * Strictly adheres to privacy protocol: never runs during normal state.
  */
+function startEmergencyGPS() {
+  if (hardwareState.safetyStatus !== "EMERGENCY") {
+    console.log("🔒 Privacy rule: GPS cannot be started while safety status is SAFE.");
+    return;
+  }
+
+  if (geoWatchId !== null) {
+    console.log("GPS watchPosition already active (id=" + geoWatchId + ")");
+    return;
+  }
+
+  if (!navigator.geolocation) {
+    console.warn("Geolocation API is not supported by this browser.");
+    gpsState = "UNAVAILABLE";
+    updateUserGPSUI("UNAVAILABLE", "Geolocation not supported by browser");
+    return;
+  }
+
+  console.log("🚨 SOS Active: Requesting browser location permission and starting watchPosition...");
+  gpsState = "REQUESTING_PERMISSION";
+  updateUserGPSUI("REQUESTING_PERMISSION", "Requesting location permission...");
+
+  const geoOptions = {
+    enableHighAccuracy: true,
+    timeout: 10000,
+    maximumAge: 0
+  };
+
+  try {
+    geoWatchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude, accuracy } = position.coords;
+        const timestamp = new Date(position.timestamp || Date.now()).toISOString();
+
+        currentEmergencyLocation = {
+          deviceId: hardwareState.deviceId,
+          latitude,
+          longitude,
+          accuracy,
+          timestamp,
+          incidentId: activeIncidentId
+        };
+
+        gpsState = "ACTIVE";
+        updateUserGPSUI("ACTIVE", "Live location sharing active", accuracy);
+        updateAdminLocationDisplay(currentEmergencyLocation);
+
+        // Transmit live coordinates to backend API
+        sendLocationUpdateToBackend(currentEmergencyLocation);
+      },
+      (error) => {
+        console.warn("Geolocation error:", error.code, error.message);
+        if (error.code === error.PERMISSION_DENIED) {
+          gpsState = "DENIED";
+          updateUserGPSUI("DENIED", "Location permission denied. Please allow location access to share your live location during this emergency.");
+        } else {
+          gpsState = "UNAVAILABLE";
+          updateUserGPSUI("UNAVAILABLE", "Location unavailable");
+        }
+      },
+      geoOptions
+    );
+  } catch (err) {
+    console.error("Failed to invoke watchPosition:", err);
+    gpsState = "UNAVAILABLE";
+    updateUserGPSUI("UNAVAILABLE", "Location unavailable");
+  }
+}
+
+/**
+ * Stops browser geolocation tracking immediately when emergency ends/resets.
+ */
+function stopEmergencyGPS() {
+  if (geoWatchId !== null) {
+    console.log("🛑 Emergency resolved: clearing GPS watchPosition (id=" + geoWatchId + ")");
+    navigator.geolocation.clearWatch(geoWatchId);
+    geoWatchId = null;
+  }
+
+  gpsState = "STOPPED";
+  currentEmergencyLocation = null;
+  emergencyStartTime = null;
+
+  updateUserGPSUI("STOPPED", "Location sharing stopped");
+  clearAdminLocationDisplay();
+
+  // Return to inactive state after brief transition
+  setTimeout(() => {
+    if (hardwareState.safetyStatus === "SAFE") {
+      gpsState = "INACTIVE";
+      updateUserGPSUI("INACTIVE", "Location sharing inactive");
+    }
+  }, 2500);
+}
+
+/**
+ * Transmits real emergency browser location to backend.
+ */
+async function sendLocationUpdateToBackend(locData) {
+  if (!isBackendConnected && !BACKEND_URL) return;
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/location/update`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(locData)
+    });
+    const result = await res.json();
+    console.log("📡 Location update transmitted to backend:", result);
+  } catch (err) {
+    console.warn("Could not transmit location update:", err.message);
+  }
+}
+
+/**
+ * Updates GPS status widget in Girl / User dashboard
+ */
+function updateUserGPSUI(state, message, accuracy) {
+  const dot = document.getElementById("userGpsDot");
+  const text = document.getElementById("userGpsStatusText");
+  const sub = document.getElementById("userGpsSubText");
+  const badge = document.getElementById("userGpsBadge");
+  const deniedAlert = document.getElementById("userGpsDeniedAlert");
+
+  if (!text) return;
+
+  if (state === "INACTIVE") {
+    text.innerText = "Location sharing inactive";
+    text.className = "card-main-val text-muted";
+    if (dot) dot.className = "status-indicator status-gray";
+    if (sub) sub.innerText = "Normal state: GPS disabled for privacy";
+    if (badge) {
+      badge.innerText = "Standby";
+      badge.className = "badge-subtle";
+    }
+    if (deniedAlert) deniedAlert.style.display = "none";
+  } else if (state === "REQUESTING_PERMISSION") {
+    text.innerText = "Requesting location permission...";
+    text.className = "card-main-val text-yellow";
+    if (dot) dot.className = "status-indicator status-yellow";
+    if (sub) sub.innerText = "Awaiting browser location approval";
+    if (badge) {
+      badge.innerText = "Requesting...";
+      badge.className = "badge-subtle";
+    }
+    if (deniedAlert) deniedAlert.style.display = "none";
+  } else if (state === "ACTIVE") {
+    text.innerText = "Live location sharing active";
+    text.className = "card-main-val text-red";
+    if (dot) dot.className = "status-indicator status-red";
+    if (sub) sub.innerText = accuracy ? `Streaming live coordinates (±${accuracy.toFixed(1)}m)` : "Streaming live coordinates to Admin";
+    if (badge) {
+      badge.innerText = "🔴 TRANSMITTING";
+      badge.className = "badge-status-red";
+    }
+    if (deniedAlert) deniedAlert.style.display = "none";
+  } else if (state === "DENIED") {
+    text.innerText = "Location permission denied";
+    text.className = "card-main-val text-red";
+    if (dot) dot.className = "status-indicator status-red";
+    if (sub) sub.innerText = "Permission required to share location during emergency";
+    if (badge) {
+      badge.innerText = "DENIED";
+      badge.className = "badge-status-red";
+    }
+    if (deniedAlert) deniedAlert.style.display = "flex";
+  } else if (state === "UNAVAILABLE") {
+    text.innerText = "Location unavailable";
+    text.className = "card-main-val text-yellow";
+    if (dot) dot.className = "status-indicator status-yellow";
+    if (sub) sub.innerText = message || "Location signal unavailable";
+    if (badge) {
+      badge.innerText = "UNAVAILABLE";
+      badge.className = "badge-subtle";
+    }
+    if (deniedAlert) deniedAlert.style.display = "none";
+  } else if (state === "STOPPED") {
+    text.innerText = "Location sharing stopped";
+    text.className = "card-main-val text-muted";
+    if (dot) dot.className = "status-indicator status-gray";
+    if (sub) sub.innerText = "Emergency resolved • Tracking halted";
+    if (badge) {
+      badge.innerText = "Stopped";
+      badge.className = "badge-subtle";
+    }
+    if (deniedAlert) deniedAlert.style.display = "none";
+  }
+}
+
+// ==========================================
+// 6. ADMIN DASHBOARD & LEAFLET MAP
+// ==========================================
+
+function initAdminMap() {
+  const mapEl = document.getElementById("adminMap");
+  if (!mapEl || typeof L === "undefined") return;
+
+  if (!adminMap) {
+    try {
+      // Default to Jaipur / central India view
+      adminMap = L.map("adminMap", {
+        zoomControl: true,
+        attributionControl: false
+      }).setView([26.8437, 75.5654], 13);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19
+      }).addTo(adminMap);
+    } catch (err) {
+      console.warn("Leaflet map init error:", err);
+    }
+  }
+}
+
+function updateAdminLocationDisplay(loc) {
+  if (!loc) return;
+
+  const lat = loc.latitude !== undefined ? Number(loc.latitude) : null;
+  const lng = loc.longitude !== undefined ? Number(loc.longitude) : null;
+  const acc = loc.accuracy !== undefined ? Number(loc.accuracy) : null;
+
+  if (lat === null || lng === null) return;
+
+  // Update Admin coordinate readout panel
+  const panelLat = document.getElementById("adminPanelLat");
+  const panelLng = document.getElementById("adminPanelLng");
+  const panelAcc = document.getElementById("adminPanelAcc");
+  const panelTime = document.getElementById("adminPanelTime");
+
+  if (panelLat) panelLat.innerText = lat.toFixed(6) + "°";
+  if (panelLng) panelLng.innerText = lng.toFixed(6) + "°";
+  if (panelAcc) panelAcc.innerText = acc ? `±${acc.toFixed(1)} m` : "N/A";
+  if (panelTime) panelTime.innerText = formatTimeAMPM(loc.timestamp ? new Date(loc.timestamp) : new Date());
+
+  // Update Admin Metric Cards
+  const adminGpsVal = document.getElementById("adminGpsVal");
+  const adminGpsDot = document.getElementById("adminGpsDot");
+  const adminGpsSub = document.getElementById("adminGpsSub");
+  const adminAccuracyVal = document.getElementById("adminAccuracyVal");
+  const adminLastUpdateVal = document.getElementById("adminLastUpdateVal");
+
+  if (adminGpsVal) {
+    adminGpsVal.innerText = "LIVE";
+    adminGpsVal.className = "text-red";
+  }
+  if (adminGpsDot) adminGpsDot.className = "status-indicator status-red";
+  if (adminGpsSub) adminGpsSub.innerText = "Live coordinates from phone browser";
+  if (adminAccuracyVal) {
+    adminAccuracyVal.innerText = acc ? `±${acc.toFixed(1)} m` : "High Accuracy";
+    adminAccuracyVal.className = "text-green";
+  }
+  if (adminLastUpdateVal) {
+    adminLastUpdateVal.innerText = formatTimeAMPM(loc.timestamp ? new Date(loc.timestamp) : new Date());
+  }
+
+  // Update Leaflet Map
+  if (typeof L !== "undefined" && adminMap) {
+    const standbyOverlay = document.getElementById("adminMapStandbyOverlay");
+    if (standbyOverlay) standbyOverlay.classList.add("hidden");
+
+    const liveBadge = document.getElementById("adminMapLiveBadge");
+    const standbyBadge = document.getElementById("adminMapStandbyBadge");
+    if (liveBadge) liveBadge.style.display = "inline-flex";
+    if (standbyBadge) standbyBadge.style.display = "none";
+
+    const customIcon = L.divIcon({
+      className: "emergency-leaflet-marker",
+      html: '<div class="pulse-marker-ring"></div><div class="pulse-marker-core">📍</div>',
+      iconSize: [40, 40],
+      iconAnchor: [20, 20]
+    });
+
+    if (adminMarker) {
+      adminMarker.setLatLng([lat, lng]);
+    } else {
+      adminMarker = L.marker([lat, lng], { icon: customIcon }).addTo(adminMap);
+      adminMarker.bindPopup(`<b>🚨 EMERGENCY SOS ACTIVE</b><br>Device: ${loc.deviceId || 'SAFEHER-001'}<br>Accuracy: ±${acc ? acc.toFixed(1) : 0}m`).openPopup();
+    }
+
+    if (acc) {
+      if (adminAccuracyCircle) {
+        adminAccuracyCircle.setLatLng([lat, lng]);
+        adminAccuracyCircle.setRadius(acc);
+      } else {
+        adminAccuracyCircle = L.circle([lat, lng], {
+          radius: acc,
+          color: "#ef476f",
+          fillColor: "#ef476f",
+          fillOpacity: 0.15,
+          weight: 1.5
+        }).addTo(adminMap);
+      }
+    }
+
+    adminMap.setView([lat, lng], 16);
+    adminMap.invalidateSize();
+  }
+}
+
+function clearAdminLocationDisplay() {
+  const panelLat = document.getElementById("adminPanelLat");
+  const panelLng = document.getElementById("adminPanelLng");
+  const panelAcc = document.getElementById("adminPanelAcc");
+  const panelTime = document.getElementById("adminPanelTime");
+
+  if (panelLat) panelLat.innerText = "--";
+  if (panelLng) panelLng.innerText = "--";
+  if (panelAcc) panelAcc.innerText = "--";
+  if (panelTime) panelTime.innerText = "--";
+
+  const adminGpsVal = document.getElementById("adminGpsVal");
+  const adminGpsDot = document.getElementById("adminGpsDot");
+  const adminGpsSub = document.getElementById("adminGpsSub");
+  const adminAccuracyVal = document.getElementById("adminAccuracyVal");
+
+  if (adminGpsVal) {
+    adminGpsVal.innerText = "Not being shared";
+    adminGpsVal.className = "text-muted";
+  }
+  if (adminGpsDot) adminGpsDot.className = "status-indicator status-gray";
+  if (adminGpsSub) adminGpsSub.innerText = "Privacy protected in SAFE mode";
+  if (adminAccuracyVal) {
+    adminAccuracyVal.innerText = "--";
+    adminAccuracyVal.className = "text-muted";
+  }
+
+  // Restore map standby
+  const standbyOverlay = document.getElementById("adminMapStandbyOverlay");
+  if (standbyOverlay) standbyOverlay.classList.remove("hidden");
+
+  const liveBadge = document.getElementById("adminMapLiveBadge");
+  const standbyBadge = document.getElementById("adminMapStandbyBadge");
+  if (liveBadge) liveBadge.style.display = "none";
+  if (standbyBadge) standbyBadge.style.display = "inline-flex";
+
+  if (adminMarker && adminMap) {
+    adminMap.removeLayer(adminMarker);
+    adminMarker = null;
+  }
+  if (adminAccuracyCircle && adminMap) {
+    adminMap.removeLayer(adminAccuracyCircle);
+    adminAccuracyCircle = null;
+  }
+}
+
+// ==========================================
+// 7. CLIENT ROUTING (/user vs /admin)
+// ==========================================
+
+function initRouter() {
+  function handleRoute() {
+    const path = window.location.pathname.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+
+    if (path.includes("/admin") || hash === "#admin") {
+      switchView("/admin");
+    } else {
+      switchView("/user");
+    }
+  }
+
+  window.addEventListener("popstate", handleRoute);
+  window.addEventListener("hashchange", handleRoute);
+  handleRoute();
+}
+
+function navigateToRoute(route) {
+  if (window.location.protocol === "http:" || window.location.protocol === "https:") {
+    try {
+      history.pushState(null, "", route);
+    } catch (e) {
+      window.location.hash = route.replace("/", "");
+    }
+  } else {
+    window.location.hash = route.replace("/", "");
+  }
+  switchView(route);
+}
+
+function switchView(route) {
+  currentRoute = route === "/admin" ? "/admin" : "/user";
+
+  const viewUser = document.getElementById("viewUser");
+  const viewAdmin = document.getElementById("viewAdmin");
+  const btnUser = document.getElementById("btnRouteUser");
+  const btnAdmin = document.getElementById("btnRouteAdmin");
+  const headerAdminBadge = document.getElementById("headerAdminBadge");
+
+  if (currentRoute === "/admin") {
+    if (viewUser) viewUser.classList.remove("active");
+    if (viewAdmin) viewAdmin.classList.add("active");
+    if (btnUser) btnUser.classList.remove("active");
+    if (btnAdmin) btnAdmin.classList.add("active");
+
+    // Initialize Leaflet map and force layout recalculation
+    initAdminMap();
+    setTimeout(() => {
+      if (adminMap) adminMap.invalidateSize();
+    }, 120);
+  } else {
+    if (viewAdmin) viewAdmin.classList.remove("active");
+    if (viewUser) viewUser.classList.add("active");
+    if (btnAdmin) btnAdmin.classList.remove("active");
+    if (btnUser) btnUser.classList.add("active");
+  }
+
+  if (headerAdminBadge) {
+    headerAdminBadge.innerText = hardwareState.safetyStatus === "EMERGENCY" ? "EMERGENCY" : "MONITOR";
+  }
+}
+
+// ==========================================
+// 8. GLOBAL UI SYNCHRONIZER
+// ==========================================
+
 function updateDashboard() {
   const isEmergency = hardwareState.safetyStatus === "EMERGENCY";
   const isOnline = hardwareState.deviceStatus === "ONLINE";
 
-  // 1. Device Status Card
+  // 1. Device Status Card (ESP8266 Connection)
   const deviceStatusText = document.getElementById("deviceStatusText");
   const deviceStatusDot = document.getElementById("deviceStatusDot");
+  const deviceWifiBadge = document.getElementById("deviceWifiBadge");
   if (deviceStatusText && deviceStatusDot) {
     deviceStatusText.innerText = hardwareState.deviceStatus;
     if (isOnline) {
       deviceStatusText.className = "card-main-val text-green";
       deviceStatusDot.className = "status-indicator status-green";
+      if (deviceWifiBadge) deviceWifiBadge.innerText = "Connected";
     } else {
       deviceStatusText.className = "card-main-val text-muted";
       deviceStatusDot.className = "status-indicator status-gray";
+      if (deviceWifiBadge) deviceWifiBadge.innerText = "Disconnected";
     }
   }
 
@@ -487,25 +1013,30 @@ function updateDashboard() {
   // 3. SOS Button Status
   const sosStatusText = document.getElementById("sosStatusText");
   const sosStatusDot = document.getElementById("sosStatusDot");
+  const sosSubBadge = document.getElementById("sosSubBadge");
   const navSosBadge = document.getElementById("navSosBadge");
   const hwSosBadge = document.getElementById("hwSosBadge");
+  const isSosActivated = isEmergency || hardwareState.sosButton === "ACTIVATED" || hardwareState.sosButton === "ACTIVE";
 
   if (sosStatusText) {
-    sosStatusText.innerText = hardwareState.sosButton === "INACTIVE" ? "READY" : hardwareState.sosButton;
-    if (isEmergency) {
+    if (isSosActivated) {
+      sosStatusText.innerText = "SOS BUTTON — ACTIVATED";
       sosStatusText.className = "card-main-val text-red";
-      sosStatusDot.className = "status-indicator status-red";
+      if (sosStatusDot) sosStatusDot.className = "status-indicator status-red";
+      if (sosSubBadge) sosSubBadge.innerText = "Arm State: Triggered";
       if (navSosBadge) {
-        navSosBadge.innerText = "ACTIVE";
+        navSosBadge.innerText = "ACTIVATED";
         navSosBadge.className = "badge-pill badge-sos-nav emergency";
       }
       if (hwSosBadge) {
-        hwSosBadge.innerText = "TRIGGERED";
+        hwSosBadge.innerText = "ACTIVATED";
         hwSosBadge.className = "badge-status-red";
       }
     } else {
+      sosStatusText.innerText = "SOS BUTTON — READY";
       sosStatusText.className = "card-main-val text-green";
-      sosStatusDot.className = "status-indicator status-green";
+      if (sosStatusDot) sosStatusDot.className = "status-indicator status-green";
+      if (sosSubBadge) sosSubBadge.innerText = "Arm State: Active";
       if (navSosBadge) {
         navSosBadge.innerText = "READY";
         navSosBadge.className = "badge-pill badge-sos-nav";
@@ -580,19 +1111,40 @@ function updateDashboard() {
     }
   }
 
-  // 7. Battery & Last Activity
-  const batteryPercentText = document.getElementById("batteryPercentText");
-  const batteryBarFill = document.getElementById("batteryBarFill");
-  const lastActivityText = document.getElementById("lastActivityText");
-  if (batteryPercentText) batteryPercentText.innerText = `${hardwareState.batteryLevel}%`;
-  if (batteryBarFill) batteryBarFill.style.width = `${hardwareState.batteryLevel}%`;
-  if (lastActivityText) lastActivityText.innerText = `Last ping: ${formatTimeAMPM(hardwareState.lastPingTime)}`;
+  // 7. Motion Detection Status (Replaces Battery & Power)
+  const motionStatusText = document.getElementById("motionStatusText");
+  const motionStatusDot = document.getElementById("motionStatusDot");
+  const motionActivitySub = document.getElementById("motionActivitySub");
+  const motionSensorBadge = document.getElementById("motionSensorBadge");
+  const isMotion = hardwareState.motionStatus === "MOTION DETECTED" || isEmergency;
+
+  if (motionStatusText) {
+    if (isMotion) {
+      motionStatusText.innerText = "MOTION DETECTED";
+      motionStatusText.className = "card-main-val text-red";
+      if (motionStatusDot) motionStatusDot.className = "status-indicator status-red";
+      if (motionActivitySub) motionActivitySub.innerText = "Motion detected";
+      if (motionSensorBadge) {
+        motionSensorBadge.innerText = "Motion Alert";
+        motionSensorBadge.className = "badge-subtle";
+      }
+    } else {
+      motionStatusText.innerText = "NORMAL";
+      motionStatusText.className = "card-main-val text-green";
+      if (motionStatusDot) motionStatusDot.className = "status-indicator status-green";
+      if (motionActivitySub) motionActivitySub.innerText = "No motion detected";
+      if (motionSensorBadge) {
+        motionSensorBadge.innerText = "Active Monitor";
+        motionSensorBadge.className = "badge-subtle";
+      }
+    }
+  }
 
   // 8. Alerts Count Today
   const alertsTodayCount = document.getElementById("alertsTodayCount");
   if (alertsTodayCount) alertsTodayCount.innerText = hardwareState.alertsCountToday;
 
-  // 9. Emergency Banner & Hero Card
+  // 9. Emergency Banner & Hero Card (User View)
   const emergencyBanner = document.getElementById("emergencyBanner");
   const sosHeroCard = document.getElementById("sosHeroCard");
   const emergencyHeroTitle = document.getElementById("emergencyHeroTitle");
@@ -617,13 +1169,13 @@ function updateDashboard() {
       sosHeroCard.classList.add("emergency-active");
       emergencyHeroTitle.innerText = "EMERGENCY ALERT ACTIVE";
       emergencyHeroTitle.className = "sos-current-status-title emergency";
-      emergencyHeroDesc.innerText = "SOS signal transmitted to cloud dashboard. Device alarm sounding and emergency contacts are being alerted.";
+      emergencyHeroDesc.innerText = "SOS signal transmitted to cloud dashboard. Device alarm sounding and live phone GPS streaming.";
       if (sosPulseRing) sosPulseRing.classList.add("emergency");
     } else {
       sosHeroCard.classList.remove("emergency-active");
       emergencyHeroTitle.innerText = "SAFE AND SECURE";
       emergencyHeroTitle.className = "sos-current-status-title";
-      emergencyHeroDesc.innerText = "The wearable device is armed and continuously monitoring for panic button presses and abrupt fall movements.";
+      emergencyHeroDesc.innerText = "The wearable device is armed and continuously monitoring for panic button presses and abrupt motion.";
       if (sosPulseRing) sosPulseRing.classList.remove("emergency");
     }
   }
@@ -641,11 +1193,118 @@ function updateDashboard() {
     telemetryBuzzer.className = hardwareState.buzzer === "ON" ? "telemetry-val text-red" : "telemetry-val text-muted";
   }
   if (telemetrySos) {
-    telemetrySos.innerText = hardwareState.sosButton === "INACTIVE" ? "READY" : hardwareState.sosButton;
+    telemetrySos.innerText = isSosActivated ? "ACTIVATED" : "READY";
     telemetrySos.className = isEmergency ? "telemetry-val text-red" : "telemetry-val text-green";
   }
 
-  // 10. Update MPU6050 Values
+  // 10. ADMIN DASHBOARD METRICS & HERO SYNC
+  const adminStatusHero = document.getElementById("adminStatusHero");
+  const adminHeroIcon = document.getElementById("adminHeroIcon");
+  const adminHeroEmoji = document.getElementById("adminHeroEmoji");
+  const adminHeroTitle = document.getElementById("adminHeroTitle");
+  const adminHeroSub = document.getElementById("adminHeroSub");
+  const btnAdminResolve = document.getElementById("btnAdminResolve");
+  const headerAdminBadge = document.getElementById("headerAdminBadge");
+
+  const adminSosDot = document.getElementById("adminSosDot");
+  const adminSosVal = document.getElementById("adminSosVal");
+  const adminSosSub = document.getElementById("adminSosSub");
+
+  const adminDeviceDot = document.getElementById("adminDeviceDot");
+  const adminDeviceVal = document.getElementById("adminDeviceVal");
+  const adminDeviceSub = document.getElementById("adminDeviceSub");
+
+  const adminMotionDot = document.getElementById("adminMotionDot");
+  const adminMotionVal = document.getElementById("adminMotionVal");
+  const adminMotionSub = document.getElementById("adminMotionSub");
+
+  const adminBuzzerDot = document.getElementById("adminBuzzerDot");
+  const adminBuzzerVal = document.getElementById("adminBuzzerVal");
+  const adminBuzzerSub = document.getElementById("adminBuzzerSub");
+
+  const adminIncidentVal = document.getElementById("adminIncidentVal");
+  const adminStartTimeVal = document.getElementById("adminStartTimeVal");
+
+  if (adminStatusHero) {
+    if (isEmergency) {
+      adminStatusHero.className = "admin-status-hero emergency";
+      if (adminHeroIcon) adminHeroIcon.className = "admin-hero-icon emergency";
+      if (adminHeroEmoji) adminHeroEmoji.innerText = "🔴";
+      if (adminHeroTitle) {
+        adminHeroTitle.innerText = "🔴 EMERGENCY ACTIVE";
+        adminHeroTitle.className = "admin-hero-title emergency";
+      }
+      if (adminHeroSub) adminHeroSub.innerText = "CRITICAL SOS IN PROGRESS: Real-time telemetry and browser GPS streaming.";
+      if (btnAdminResolve) btnAdminResolve.style.display = "inline-flex";
+      if (headerAdminBadge) {
+        headerAdminBadge.innerText = "EMERGENCY";
+        headerAdminBadge.className = "badge-role admin";
+      }
+    } else {
+      adminStatusHero.className = "admin-status-hero normal";
+      if (adminHeroIcon) adminHeroIcon.className = "admin-hero-icon normal";
+      if (adminHeroEmoji) adminHeroEmoji.innerText = "🟢";
+      if (adminHeroTitle) {
+        adminHeroTitle.innerText = "🟢 NO ACTIVE EMERGENCY";
+        adminHeroTitle.className = "admin-hero-title normal";
+      }
+      if (adminHeroSub) adminHeroSub.innerText = "SafeHer monitoring system active • Phone GPS sharing is inactive for privacy";
+      if (btnAdminResolve) btnAdminResolve.style.display = "none";
+      if (headerAdminBadge) {
+        headerAdminBadge.innerText = "MONITOR";
+        headerAdminBadge.className = "badge-role user";
+      }
+    }
+  }
+
+  if (adminSosVal && adminSosDot) {
+    if (isSosActivated) {
+      adminSosVal.innerText = "ACTIVATED";
+      adminSosVal.className = "text-red";
+      adminSosDot.className = "status-indicator status-red";
+      if (adminSosSub) adminSosSub.innerText = "SOS Button Triggered";
+    } else {
+      adminSosVal.innerText = "READY";
+      adminSosVal.className = "text-green";
+      adminSosDot.className = "status-indicator status-green";
+      if (adminSosSub) adminSosSub.innerText = "Tactile Switch Standby";
+    }
+  }
+
+  if (adminDeviceVal && adminDeviceDot) {
+    adminDeviceVal.innerText = hardwareState.deviceStatus;
+    adminDeviceVal.className = isOnline ? "text-green" : "text-muted";
+    adminDeviceDot.className = isOnline ? "status-indicator status-green" : "status-indicator status-gray";
+  }
+
+  if (adminMotionVal && adminMotionDot) {
+    if (isMotion) {
+      adminMotionVal.innerText = "DETECTED";
+      adminMotionVal.className = "text-red";
+      adminMotionDot.className = "status-indicator status-red";
+      if (adminMotionSub) adminMotionSub.innerText = "Abnormal movement detected";
+    } else {
+      adminMotionVal.innerText = "NORMAL";
+      adminMotionVal.className = "text-green";
+      adminMotionDot.className = "status-indicator status-green";
+      if (adminMotionSub) adminMotionSub.innerText = "No abnormal motion";
+    }
+  }
+
+  if (adminBuzzerVal && adminBuzzerDot) {
+    adminBuzzerVal.innerText = hardwareState.buzzer;
+    adminBuzzerVal.className = hardwareState.buzzer === "ON" ? "text-red" : "text-muted";
+    adminBuzzerDot.className = hardwareState.buzzer === "ON" ? "status-indicator status-red" : "status-indicator status-gray";
+  }
+
+  if (adminIncidentVal) {
+    adminIncidentVal.innerText = isEmergency ? activeIncidentId : "INC-STANDBY";
+  }
+  if (adminStartTimeVal) {
+    adminStartTimeVal.innerText = isEmergency && emergencyStartTime ? formatTimeAMPM(emergencyStartTime) : "--";
+  }
+
+  // 11. Update Sensor Values
   updateSensorDisplay();
 }
 
@@ -680,7 +1339,7 @@ function updateSensorDisplay() {
 }
 
 // ==========================================
-// 5. SENSOR SIMULATION & WAVEFORM CHART
+// 9. SENSOR SIMULATION & WAVEFORM CHART
 // ==========================================
 
 function startSensorSimulation() {
@@ -715,6 +1374,10 @@ function runLocalSensorUpdate() {
   hardwareState.accel = freshData.accel;
   hardwareState.gyro = freshData.gyro;
 
+  if (hardwareState.safetyStatus === "EMERGENCY") {
+    hardwareState.motionStatus = "MOTION DETECTED";
+  }
+
   waveHistory.x.shift();
   waveHistory.x.push(freshData.accel.x);
 
@@ -725,6 +1388,7 @@ function runLocalSensorUpdate() {
   waveHistory.z.push(freshData.accel.z);
 
   updateSensorDisplay();
+  updateDashboard();
 }
 
 /**
@@ -791,7 +1455,7 @@ function drawSeries(ctx, dataArray, color, width, height, minVal, maxVal) {
 }
 
 // ==========================================
-// 6. ALERT HISTORY & TABLE RENDERING
+// 10. ALERT HISTORY & TABLE RENDERING
 // ==========================================
 
 function renderAlertHistory() {
@@ -859,7 +1523,7 @@ function clearHistoryConfirmation() {
 }
 
 // ==========================================
-// 7. NAVIGATION & TABS
+// 11. NAVIGATION & TABS
 // ==========================================
 
 function initNavigation() {
@@ -873,6 +1537,11 @@ function initNavigation() {
     item.addEventListener("click", (e) => {
       e.preventDefault();
       const targetTab = item.getAttribute("data-tab");
+
+      // Make sure we are on the user dashboard view when clicking sidebar tabs
+      if (currentRoute !== "/user") {
+        navigateToRoute("/user");
+      }
 
       navItems.forEach((nav) => nav.classList.remove("active"));
       item.classList.add("active");
@@ -898,7 +1567,7 @@ function initNavigation() {
 }
 
 // ==========================================
-// 8. TOAST NOTIFICATIONS & AUDIO
+// 12. TOAST NOTIFICATIONS & AUDIO
 // ==========================================
 
 function showToast(message, type = "info") {
@@ -946,7 +1615,7 @@ function playSimulatedBeep() {
 }
 
 // ==========================================
-// 9. SETTINGS & UTILITY HELPERS
+// 13. SETTINGS & UTILITY HELPERS
 // ==========================================
 
 function updateSimInterval(val) {
@@ -998,7 +1667,7 @@ function formatTimeAMPM(date) {
 }
 
 // ==========================================
-// 10. MODAL: ADD EMERGENCY CONTACT
+// 14. MODAL: ADD EMERGENCY CONTACT
 // ==========================================
 
 function showAddContactModal() {
@@ -1072,3 +1741,6 @@ window.saveNewContact = saveNewContact;
 window.updateSimInterval = updateSimInterval;
 window.toggleDeviceOnline = toggleDeviceOnline;
 window.showToast = showToast;
+window.navigateToRoute = navigateToRoute;
+window.startEmergencyGPS = startEmergencyGPS;
+window.stopEmergencyGPS = stopEmergencyGPS;

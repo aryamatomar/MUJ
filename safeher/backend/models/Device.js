@@ -39,12 +39,6 @@ const deviceSchema = new mongoose.Schema(
       enum: ['GREEN', 'RED', 'BLUE', 'YELLOW', 'OFF'],
       default: 'GREEN',
     },
-    batteryLevel: {
-      type: Number,
-      min: 0,
-      max: 100,
-      default: 92,
-    },
     wifiSignal: {
       type: Number,
       default: -55, // dBm (e.g. -30 dBm is excellent, -80 dBm is weak)
