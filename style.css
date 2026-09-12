@@ -3,7 +3,7 @@
    Theme: Modern Dark Mode IoT Monitoring System
    ========================================================================== */
 
-/* ---------------- CSS Variables & Tokens ---------------- */
+/* ---------------- CSS Variables & Tokens (Default: Dark Mode) ---------------- */
 :root {
   /* Color Palette */
   --bg-app: #090d16;
@@ -11,7 +11,7 @@
   --bg-card: #141c2e;
   --bg-card-hover: #19233a;
   --bg-card-inner: #0d1422;
-  --bg-header: rgba(15, 22, 36, 0.85);
+  --bg-header: rgba(15, 22, 36, 0.88);
 
   /* Borders & Dividers */
   --border-subtle: #1e2a42;
@@ -63,6 +63,58 @@
   --transition-normal: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* ---------------- Light Theme Design Tokens ---------------- */
+[data-theme="light"],
+body.theme-light {
+  /* Clean, crisp & modern light backgrounds */
+  --bg-app: #f1f5f9;
+  --bg-sidebar: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f8fafc;
+  --bg-card-inner: #f8fafc;
+  --bg-header: rgba(255, 255, 255, 0.92);
+
+  /* High contrast refined borders */
+  --border-subtle: #e2e8f0;
+  --border-focus: #2563eb;
+  --border-glow-safe: rgba(5, 150, 105, 0.25);
+  --border-glow-danger: rgba(225, 29, 72, 0.35);
+
+  /* Primary Accent & Brand */
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-soft: rgba(37, 99, 235, 0.1);
+
+  /* Safety Status Colors adjusted for light background contrast */
+  --safe-green: #059669;
+  --safe-green-soft: rgba(5, 150, 105, 0.12);
+  --safe-green-glow: rgba(5, 150, 105, 0.25);
+
+  --danger-red: #e11d48;
+  --danger-red-soft: rgba(225, 29, 72, 0.12);
+  --danger-red-glow: rgba(225, 29, 72, 0.25);
+
+  --warning-yellow: #d97706;
+  --warning-yellow-soft: rgba(217, 119, 6, 0.12);
+
+  --info-blue: #0284c7;
+  --info-cyan: #0891b2;
+  --info-cyan-soft: rgba(8, 145, 178, 0.12);
+
+  /* Crisp Typography for 100% contrast & legibility */
+  --text-main: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --text-muted-sm: #94a3b8;
+
+  /* Modern soft drop shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+  --shadow-glow-danger: 0 0 20px rgba(225, 29, 72, 0.2);
+  --shadow-glow-safe: 0 0 18px rgba(5, 150, 105, 0.18);
+}
+
 /* ---------------- Global Reset & Typography ---------------- */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -78,6 +130,30 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+}
+
+/* Smooth Theme Transitions */
+body,
+.app-header,
+.sidebar,
+.card-generic,
+.status-card,
+.hardware-item-card,
+.modal-card,
+.auth-card,
+.data-table,
+.system-time,
+.btn-route,
+.btn-theme-toggle,
+.my-device-section,
+.route-switch-group,
+.role-segmented-switch,
+.form-input,
+.form-select,
+.user-profile-badge,
+.incident-detail-card,
+.admin-card-glass {
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -428,7 +504,7 @@ button, input, select {
   font-size: 1.35rem;
   font-weight: 800;
   letter-spacing: -0.02em;
-  color: #ffffff;
+  color: var(--text-main);
 }
 
 .header-subtitle {
@@ -441,7 +517,79 @@ button, input, select {
 .header-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
+}
+
+/* ---------------- Theme Toggle Switch Button ---------------- */
+.btn-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card-inner);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  padding: 6px 14px;
+  border-radius: var(--radius-md);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  user-select: none;
+}
+
+.btn-theme-toggle:hover {
+  color: var(--text-main);
+  border-color: var(--border-focus);
+  background: var(--primary-soft);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-theme-toggle:active {
+  transform: translateY(0);
+}
+
+.theme-icon-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+}
+
+.theme-icon {
+  transition: transform 0.25s ease, opacity 0.2s ease;
+}
+
+/* By default in dark mode, show Moon icon and hide Sun */
+body:not(.theme-light) .icon-sun,
+[data-theme="dark"] .icon-sun {
+  display: none;
+}
+
+body:not(.theme-light) .icon-moon,
+[data-theme="dark"] .icon-moon {
+  display: block;
+  color: #ffd166;
+}
+
+/* In light mode, show Sun icon and hide Moon */
+body.theme-light .icon-moon,
+[data-theme="light"] .icon-moon {
+  display: none;
+}
+
+body.theme-light .icon-sun,
+[data-theme="light"] .icon-sun {
+  display: block;
+  color: #f59e0b;
+}
+
+.theme-toggle-label {
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .proto-pill {
@@ -3164,9 +3312,9 @@ body.layout-auth .auth-card {
 }
 
 .my-device-input {
-  background: #0f172a !important;
+  background: var(--bg-card-inner) !important;
   border: 1px solid var(--border-subtle) !important;
-  color: #f1f5f9 !important;
+  color: var(--text-main) !important;
   font-family: monospace;
   font-weight: 600;
   letter-spacing: 0.05em;
@@ -3199,6 +3347,214 @@ body.layout-auth .auth-card {
   color: #fca5a5;
   font-size: 0.84rem;
   font-weight: 500;
+}
+
+/* ==========================================================================
+   LIGHT THEME ENHANCEMENTS & COMPONENT CONTRAST ADAPTATIONS
+   ========================================================================== */
+
+body.theme-light,
+[data-theme="light"] {
+  /* Dynamic Background Glow */
+  .main-content {
+    background: radial-gradient(circle at 80% 10%, rgba(37, 99, 235, 0.04) 0%, transparent 60%);
+  }
+
+  /* Sidebar styling */
+  .sidebar {
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border-subtle);
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.08);
+  }
+
+  .sidebar-header {
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .sidebar-footer {
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .brand-name {
+    background: linear-gradient(90deg, #0f172a 40%, #2563eb 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .nav-item:hover {
+    background: #f1f5f9;
+    color: var(--text-main);
+  }
+
+  .nav-item.active {
+    background: rgba(37, 99, 235, 0.1);
+    color: var(--primary);
+  }
+
+  /* Header Brand & Titles */
+  .header-title {
+    color: var(--text-main);
+  }
+
+  .header-subtitle {
+    color: var(--text-muted);
+  }
+
+  /* Cards & Elevating Panels */
+  .status-card,
+  .card-generic,
+  .hardware-item-card,
+  .my-device-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .status-card:hover,
+  .card-generic:hover {
+    border-color: #cbd5e1;
+    box-shadow: var(--shadow-md);
+  }
+
+  .card-footer-info {
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  /* Data Table & Alerts */
+  .data-table th {
+    background: var(--bg-card-inner);
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .data-table td {
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+  }
+
+  .data-table tbody tr:hover {
+    background: var(--bg-card-inner);
+  }
+
+  /* Form Elements & Inputs */
+  .form-input,
+  .form-select,
+  .auth-form .form-input,
+  .my-device-input {
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #0f172a !important;
+  }
+
+  .form-input:focus,
+  .form-select:focus,
+  .auth-form .form-input:focus,
+  .my-device-input:focus {
+    border-color: #2563eb !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+  }
+
+  /* Auth Card & Layout */
+  .auth-card {
+    background: #ffffff;
+    border: 1px solid var(--border-subtle);
+    box-shadow: var(--shadow-lg), 0 0 35px rgba(37, 99, 235, 0.08);
+  }
+
+  body.layout-auth .auth-card {
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08), 0 0 45px rgba(37, 99, 235, 0.1);
+  }
+
+  .auth-tabs {
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+  }
+
+  .auth-tab-btn:hover {
+    color: #0f172a;
+  }
+
+  .role-segmented-switch {
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+  }
+
+  .role-switch-btn:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+  }
+
+  /* Modal Cards */
+  .modal-overlay {
+    background: rgba(15, 23, 42, 0.45);
+  }
+
+  .modal-card {
+    background: #ffffff;
+    border: 1px solid var(--border-subtle);
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.15);
+  }
+
+  /* Buttons */
+  .btn-secondary {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+  }
+
+  .btn-secondary:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+  }
+
+  .btn-cancel-countdown {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    color: #1e293b;
+  }
+
+  .btn-cancel-countdown:hover {
+    background: rgba(225, 29, 72, 0.1);
+    border-color: #e11d48;
+    color: #e11d48;
+  }
+
+  .countdown-badge {
+    background: #ffffff;
+    border-color: rgba(225, 29, 72, 0.4);
+    color: #0f172a;
+    box-shadow: 0 2px 8px rgba(225, 29, 72, 0.12);
+  }
+
+  .countdown-badge strong {
+    color: #d97706;
+  }
+
+  .sos-countdown-card {
+    background: linear-gradient(135deg, rgba(225, 29, 72, 0.08) 0%, rgba(255, 255, 255, 0.95) 100%);
+    border: 1px solid rgba(225, 29, 72, 0.3);
+  }
+
+  /* Admin Map Overlay Standby */
+  .admin-map-overlay-standby {
+    background: rgba(255, 255, 255, 0.92);
+  }
+
+  .admin-map-wrapper {
+    background: #f8fafc;
+  }
+
+  /* Waveform Container */
+  .wave-canvas-wrapper {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+  }
+
+  /* Device Mini Card in Sidebar Footer */
+  .device-mini-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+  }
 }
 
 
