@@ -430,6 +430,11 @@ let gpsState = "INACTIVE"; // 'INACTIVE' | 'REQUESTING_PERMISSION' | 'ACTIVE' | 
 let emergencyStartTime = null;
 let activeIncidentId = "INC-STANDBY";
 
+// 30-Second SOS Emergency Countdown State
+let sosCountdownTimer = null;
+let sosCountdownSeconds = 30;
+let sosCountdownStatus = "IDLE"; // 'IDLE' | 'COUNTING' | 'CANCELLED' | 'READY'
+
 // Admin Leaflet Map State
 let adminMap = null;
 let adminMarker = null;
@@ -668,6 +673,9 @@ function initBackendConnection() {
       // Start Browser Geolocation ONLY on emergency trigger
       startEmergencyGPS();
 
+      // Start 30-Second SOS Emergency Countdown
+      startSosCountdown(30);
+
       updateDashboard();
       playSimulatedBeep();
       const toastMsg = alertUsername
@@ -689,6 +697,9 @@ function initBackendConnection() {
 
       // Stop Geolocation tracking immediately
       stopEmergencyGPS();
+
+      // Reset SOS Countdown
+      resetSosCountdown();
 
       updateDashboard();
       showToast("✅ System Reset: Device returned to SAFE state.", "success");
@@ -832,6 +843,9 @@ async function triggerSOS() {
   // Start Browser Geolocation ONLY on emergency trigger
   startEmergencyGPS();
 
+  // Start 30-Second SOS Emergency Countdown
+  startSosCountdown(30);
+
   updateDashboard();
   playSimulatedBeep();
   showToast("🚨 EMERGENCY SOS TRIGGERED! Node WS-001 sounding alarm.", "danger");
@@ -878,6 +892,9 @@ async function resetAlert() {
   // Stop Geolocation tracking immediately
   stopEmergencyGPS();
 
+  // Reset SOS Countdown
+  resetSosCountdown();
+
   updateDashboard();
   showToast("✅ System Reset: Device WS-001 returned to SAFE state.", "success");
 
@@ -896,6 +913,153 @@ async function resetAlert() {
     } catch (err) {
       console.warn("Could not send Reset to backend API:", err.message);
     }
+  }
+}
+
+// ==========================================
+// 4.1 SOS EMERGENCY 30-SECOND COUNTDOWN ENGINE
+// ==========================================
+
+/**
+ * Initiates the 30-second visible countdown.
+ */
+function startSosCountdown(duration = 30) {
+  if (sosCountdownTimer) {
+    clearInterval(sosCountdownTimer);
+    sosCountdownTimer = null;
+  }
+
+  sosCountdownSeconds = duration;
+  sosCountdownStatus = "COUNTING";
+  updateSosCountdownUI();
+
+  sosCountdownTimer = setInterval(() => {
+    sosCountdownSeconds--;
+    if (sosCountdownSeconds > 0) {
+      updateSosCountdownUI();
+    } else {
+      sosCountdownSeconds = 0;
+      clearInterval(sosCountdownTimer);
+      sosCountdownTimer = null;
+      sosCountdownStatus = "READY";
+      updateSosCountdownUI();
+      showToast("📞 Emergency call ready", "success");
+    }
+  }, 1000);
+}
+
+/**
+ * Cancels emergency countdown without resetting SOS / GPS telemetry.
+ */
+function cancelEmergencyCountdown() {
+  if (sosCountdownTimer) {
+    clearInterval(sosCountdownTimer);
+    sosCountdownTimer = null;
+  }
+  sosCountdownStatus = "CANCELLED";
+  updateSosCountdownUI();
+  showToast("Emergency countdown cancelled. SOS alarm and live GPS tracking remain active.", "info");
+}
+
+/**
+ * Resets countdown state back to idle.
+ */
+function resetSosCountdown() {
+  if (sosCountdownTimer) {
+    clearInterval(sosCountdownTimer);
+    sosCountdownTimer = null;
+  }
+  sosCountdownSeconds = 30;
+  sosCountdownStatus = "IDLE";
+  updateSosCountdownUI();
+}
+
+/**
+ * Synchronizes DOM elements for the countdown timer and button across banner and hero card.
+ */
+function updateSosCountdownUI() {
+  // 1. Top Banner Elements
+  const bannerCountdownGroup = document.getElementById("bannerCountdownGroup");
+  const countdownBadge = document.getElementById("countdownBadge");
+  const countdownClockIcon = document.getElementById("countdownClockIcon");
+  const countdownText = document.getElementById("countdownText");
+  const btnCancelEmergency = document.getElementById("btnCancelEmergency");
+
+  // 2. Hero Section Elements (Emergency Tab)
+  const heroCountdownCard = document.getElementById("sosHeroCountdownCard");
+  const countdownCircle = document.getElementById("countdownCircle");
+  const heroSeconds = document.getElementById("heroCountdownSeconds");
+  const heroUnit = document.getElementById("heroCountdownUnit");
+  const heroTitle = document.getElementById("heroCountdownTitle");
+  const heroDesc = document.getElementById("heroCountdownDesc");
+  const btnHeroCancelEmergency = document.getElementById("btnHeroCancelEmergency");
+
+  if (sosCountdownStatus === "COUNTING") {
+    // Top banner
+    if (bannerCountdownGroup) bannerCountdownGroup.style.display = "flex";
+    if (countdownBadge) countdownBadge.className = "countdown-badge";
+    if (countdownClockIcon) countdownClockIcon.innerText = "⏱️";
+    if (countdownText) countdownText.innerHTML = `Dispatching in <strong id="countdownSeconds">${sosCountdownSeconds}</strong>s`;
+    if (btnCancelEmergency) {
+      btnCancelEmergency.style.display = "inline-flex";
+      btnCancelEmergency.innerHTML = `
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        <span>Cancel Emergency</span>
+      `;
+    }
+
+    // Hero card
+    if (heroCountdownCard) heroCountdownCard.style.display = "flex";
+    if (heroCountdownCard) heroCountdownCard.className = "sos-countdown-card";
+    if (countdownCircle) countdownCircle.className = "countdown-timer-circle";
+    if (heroSeconds) heroSeconds.innerText = sosCountdownSeconds;
+    if (heroUnit) heroUnit.innerText = "SEC";
+    if (heroTitle) heroTitle.innerText = "Emergency Dispatch Countdown";
+    if (heroDesc) heroDesc.innerText = "Automated emergency response countdown active. Press Cancel if triggered by mistake.";
+    if (btnHeroCancelEmergency) {
+      btnHeroCancelEmergency.style.display = "inline-flex";
+      btnHeroCancelEmergency.innerHTML = `
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        <span>Cancel Emergency</span>
+      `;
+    }
+  } else if (sosCountdownStatus === "READY") {
+    // Reached 0 -> Show "Emergency call ready" only
+    if (bannerCountdownGroup) bannerCountdownGroup.style.display = "flex";
+    if (countdownBadge) countdownBadge.className = "countdown-badge ready";
+    if (countdownClockIcon) countdownClockIcon.innerText = "📞";
+    if (countdownText) countdownText.innerHTML = `<span style="color: var(--safe-green); font-weight: 700;">Emergency call ready</span>`;
+    if (btnCancelEmergency) btnCancelEmergency.style.display = "none";
+
+    // Hero card: Reached 0 -> "Emergency call ready"
+    if (heroCountdownCard) heroCountdownCard.style.display = "flex";
+    if (heroCountdownCard) heroCountdownCard.className = "sos-countdown-card ready";
+    if (countdownCircle) countdownCircle.className = "countdown-timer-circle ready";
+    if (heroSeconds) heroSeconds.innerText = "0";
+    if (heroUnit) heroUnit.innerText = "CALL";
+    if (heroTitle) heroTitle.innerHTML = `<span style="color: var(--safe-green);">Emergency call ready</span>`;
+    if (heroDesc) heroDesc.innerText = "Verification countdown elapsed. Automated emergency call line is ready.";
+    if (btnHeroCancelEmergency) btnHeroCancelEmergency.style.display = "none";
+  } else if (sosCountdownStatus === "CANCELLED") {
+    // Cancelled: stop timer, keep SOS/GPS data intact
+    if (bannerCountdownGroup) bannerCountdownGroup.style.display = "flex";
+    if (countdownBadge) countdownBadge.className = "countdown-badge cancelled";
+    if (countdownClockIcon) countdownClockIcon.innerText = "🛑";
+    if (countdownText) countdownText.innerHTML = `<span>Countdown cancelled • SOS/GPS active</span>`;
+    if (btnCancelEmergency) btnCancelEmergency.style.display = "none";
+
+    if (heroCountdownCard) heroCountdownCard.style.display = "flex";
+    if (heroCountdownCard) heroCountdownCard.className = "sos-countdown-card cancelled";
+    if (countdownCircle) countdownCircle.className = "countdown-timer-circle cancelled";
+    if (heroSeconds) heroSeconds.innerText = "OFF";
+    if (heroUnit) heroUnit.innerText = "HALT";
+    if (heroTitle) heroTitle.innerText = "Countdown Cancelled";
+    if (heroDesc) heroDesc.innerText = "Emergency call countdown cancelled. Live SOS alerts and GPS tracking remain active.";
+    if (btnHeroCancelEmergency) btnHeroCancelEmergency.style.display = "none";
+  } else {
+    // IDLE
+    if (bannerCountdownGroup) bannerCountdownGroup.style.display = "none";
+    if (heroCountdownCard) heroCountdownCard.style.display = "none";
   }
 }
 
@@ -2785,5 +2949,8 @@ window.selectRegisterRole = selectRegisterRole;
 window.handleLoginSubmit = handleLoginSubmit;
 window.handleRegisterSubmit = handleRegisterSubmit;
 window.handleLogout = handleLogout;
+window.startSosCountdown = startSosCountdown;
+window.cancelEmergencyCountdown = cancelEmergencyCountdown;
+window.resetSosCountdown = resetSosCountdown;
 window.authStorage = authStorage;
 window.authFetch = authFetch;

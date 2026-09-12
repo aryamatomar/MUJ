@@ -44,13 +44,7 @@
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
         <div class="brand-logo">
-          <div class="logo-shield">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-              <path d="M12 8v4"/>
-              <circle cx="12" cy="15" r="1"/>
-            </svg>
-          </div>
+          <img src="assets/logo.png" alt="SafeHer Logo" class="sidebar-brand-logo" />
           <div class="brand-text">
             <span class="brand-name">SafeHer</span>
             <span class="brand-tagline">Safety IoT Core</span>
@@ -146,6 +140,7 @@
           <button class="btn-icon mobile-menu-btn" id="mobileMenuBtn" aria-label="Open Navigation">
             <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
           </button>
+          <img src="assets/logo.png" alt="SafeHer Logo" class="navbar-brand-logo" />
           <div>
             <h1 class="header-title">SafeHer</h1>
             <p class="header-subtitle">WOMEN SAFETY MONITORING SYSTEM</p>
@@ -202,6 +197,16 @@
           <div class="banner-text">
             <h4>CRITICAL EMERGENCY ALERT TRIGGERED</h4>
             <p>SOS trigger detected from Node <strong>WS-001</strong>.</p>
+          </div>
+          <div class="banner-countdown-group" id="bannerCountdownGroup">
+            <div class="countdown-badge" id="countdownBadge">
+              <span class="countdown-clock-icon" id="countdownClockIcon">⏱️</span>
+              <span class="countdown-text" id="countdownText">Dispatching in <strong id="countdownSeconds">30</strong>s</span>
+            </div>
+            <button class="btn-cancel-countdown" id="btnCancelEmergency" onclick="cancelEmergencyCountdown()" title="Cancel emergency countdown">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              <span>Cancel Emergency</span>
+            </button>
           </div>
           <button class="btn-banner-reset" onclick="resetAlert()">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
@@ -575,6 +580,24 @@
                 <p class="sos-current-status-desc" id="emergencyHeroDesc">
                   The wearable device is armed and continuously monitoring for panic button presses and abrupt fall movements.
                 </p>
+              </div>
+
+              <!-- Dedicated 30-Second SOS Emergency Countdown Card -->
+              <div class="sos-countdown-card" id="sosHeroCountdownCard" style="display: none;">
+                <div class="countdown-card-left">
+                  <div class="countdown-timer-circle" id="countdownCircle">
+                    <span class="countdown-number" id="heroCountdownSeconds">30</span>
+                    <span class="countdown-unit" id="heroCountdownUnit">SEC</span>
+                  </div>
+                  <div class="countdown-info-text">
+                    <h4 id="heroCountdownTitle">Emergency Dispatch Countdown</h4>
+                    <p id="heroCountdownDesc">Automated emergency response countdown active. Press Cancel if triggered by mistake.</p>
+                  </div>
+                </div>
+                <button class="btn-cancel-countdown-large" id="btnHeroCancelEmergency" onclick="cancelEmergencyCountdown()" title="Cancel countdown without resetting SOS/GPS">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                  <span>Cancel Emergency</span>
+                </button>
               </div>
 
               <div class="sos-hardware-telemetry">
