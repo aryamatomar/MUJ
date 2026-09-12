@@ -30,6 +30,50 @@ let currentRoute = "/user";
 // ==========================================
 const STORAGE_KEY_TOKEN = "safeher_token";
 const STORAGE_KEY_USER = "safeher_user";
+const STORAGE_KEY_THEME = "safeher_theme";
+
+// ==========================================
+// 1.2 THEME MANAGEMENT (Dark / Light Mode)
+// ==========================================
+function initTheme() {
+  const savedTheme = localStorage.getItem(STORAGE_KEY_THEME) || "dark";
+  applyTheme(savedTheme, false);
+}
+
+function applyTheme(theme, showFeedback = false) {
+  const isLight = theme === "light";
+  if (isLight) {
+    document.documentElement.setAttribute("data-theme", "light");
+    document.body.classList.add("theme-light");
+    document.body.classList.remove("theme-dark");
+  } else {
+    document.documentElement.setAttribute("data-theme", "dark");
+    document.body.classList.remove("theme-light");
+    document.body.classList.add("theme-dark");
+  }
+
+  // Update theme toggle button UI
+  const themeToggleLabel = document.getElementById("themeToggleLabel");
+  const btnThemeToggle = document.getElementById("btnThemeToggle");
+  if (themeToggleLabel) {
+    themeToggleLabel.innerText = isLight ? "Light" : "Dark";
+  }
+  if (btnThemeToggle) {
+    btnThemeToggle.setAttribute("aria-label", `Switch to ${isLight ? "Dark" : "Light"} mode`);
+    btnThemeToggle.setAttribute("title", `Switch to ${isLight ? "Dark" : "Light"} mode`);
+  }
+
+  if (showFeedback && typeof showToast === "function") {
+    showToast(`Switched to ${isLight ? "Light" : "Dark"} Theme`, "info");
+  }
+}
+
+function toggleTheme() {
+  const currentTheme = document.documentElement.getAttribute("data-theme") || (document.body.classList.contains("theme-light") ? "light" : "dark");
+  const newTheme = currentTheme === "light" ? "dark" : "light";
+  localStorage.setItem(STORAGE_KEY_THEME, newTheme);
+  applyTheme(newTheme, true);
+}
 
 const authStorage = {
   getToken: () => localStorage.getItem(STORAGE_KEY_TOKEN),
@@ -487,6 +531,9 @@ const waveHistory = {
 // ==========================================
 document.addEventListener("DOMContentLoaded", () => {
   console.log("SafeHer Web App initialized (Architecture v2.0 - Emergency GPS Only)");
+
+  // Initialize theme mode (Dark / Light)
+  initTheme();
 
   // Setup client routing (/user vs /admin)
   initRouter();
@@ -2079,12 +2126,13 @@ function initSensorWaveform() {
     const width = canvas.width;
     const height = canvas.height;
 
-    // Clear background
-    ctx.fillStyle = "#0d1422";
+    // Clear background dynamically based on active theme
+    const isLight = document.body.classList.contains("theme-light") || document.documentElement.getAttribute("data-theme") === "light";
+    ctx.fillStyle = isLight ? "#f8fafc" : "#0d1422";
     ctx.fillRect(0, 0, width, height);
 
     // Draw horizontal grid lines
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+    ctx.strokeStyle = isLight ? "rgba(0, 0, 0, 0.06)" : "rgba(255, 255, 255, 0.05)";
     ctx.lineWidth = 1;
     for (let y = 30; y < height; y += 40) {
       ctx.beginPath();
@@ -2952,5 +3000,8 @@ window.handleLogout = handleLogout;
 window.startSosCountdown = startSosCountdown;
 window.cancelEmergencyCountdown = cancelEmergencyCountdown;
 window.resetSosCountdown = resetSosCountdown;
+window.initTheme = initTheme;
+window.applyTheme = applyTheme;
+window.toggleTheme = toggleTheme;
 window.authStorage = authStorage;
 window.authFetch = authFetch;
